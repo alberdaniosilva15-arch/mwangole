@@ -1,0 +1,239 @@
+{
+  "kit": "assets-src/kit-cidade-lowpoly/models",
+  "out": "web/assets",
+  "models": [
+    "residencial/casa_simples",
+    "residencial/casa_sobrado",
+    "residencial/casas_geminadas",
+    "residencial/predio_alto",
+    "residencial/predio_apartamentos",
+    "comercial/banco",
+    "comercial/escritorio",
+    "comercial/hotel",
+    "comercial/loja_esquina",
+    "comercial/mercado",
+    "comercial/restaurante",
+    "comercial/shopping",
+    "comercial/posto_recarga",
+    "publicos/escola",
+    "publicos/hospital",
+    "publicos/policia",
+    "publicos/bombeiros",
+    "publicos/museu",
+    "publicos/biblioteca",
+    "publicos/prefeitura",
+    "publicos/monumento",
+    "industrial/galpao",
+    "industrial/oficina",
+    "industrial/fabrica",
+    "mobiliario/poste_luz",
+    "mobiliario/ponto_onibus",
+    "mobiliario/quiosque",
+    "mobiliario/semaforo",
+    "mobiliario/banco_praca",
+    "mobiliario/lixeira",
+    "mobiliario/parquinho",
+    "mobiliario/hidrante",
+    "vegetacao/ipe_amarelo",
+    "vegetacao/buriti",
+    "vegetacao/araucaria",
+    "vegetacao/arbustos",
+    "vegetacao/pedras",
+    "parques/parque",
+    "parques/parque_linear",
+    "beira_rio/trapiche",
+    "beira_rio/canoa",
+    "beira_rio/barco_pesca",
+    "veiculos/carro",
+    "veiculos/taxi",
+    "veiculos/onibus",
+    "veiculos/caminhao",
+    "veiculos/caminhao_pipa",
+    "veiculos/carro_eletrico",
+    {
+      "name": "meus/casa_kj",
+      "cell": 0.05
+    },
+    {
+      "name": "meus/casa_estudio",
+      "cell": 0.1
+    },
+    {
+      "name": "meus/predio_flatiron",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Flatiron_1",
+      "cell": 0.35,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_moderno",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_5",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_moderno_b",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_5_B",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_vidro",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_4",
+      "cell": 0.3,
+      "skin": true,
+      "skin_map": {
+        "Concrete": "facadeA"
+      }
+    },
+    {
+      "name": "meus/predio_brutalista",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Brutal_1",
+      "cell": 0.3,
+      "skin": true,
+      "skin_map": {
+        "Concrete": "facadeA"
+      }
+    },
+    {
+      "name": "meus/predio_classico",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ClassicOffice_1",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_artdeco",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ArtDeco_1",
+      "cell": 0.3,
+      "skin": true,
+      "skin_map": {
+        "Concrete": "facadeA"
+      }
+    },
+    {
+      "name": "meus/predio_publico",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_PublicBuilding_1",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_residencial",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Residential_2",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_residencial_b",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Residential_3",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_residencial_c",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Residential_4",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_escritorio",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_1",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_escritorio_b",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_1_B",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_escritorio_c",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_2",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_escritorio_d",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_ModernOffice_3",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_brownstone",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_BrownstoneOffice_1",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/predio_brownstone_b",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_BrownstoneOffice_2",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/loja_downtown",
+      "file": "predios_downtown.glb",
+      "pick": "Downtown_Mall_1",
+      "cell": 0.3,
+      "skin": true
+    },
+    {
+      "name": "meus/condominio_apartamentos",
+      "file": "condominio_apartamentos.glb",
+      "cell": 0.5,
+      "brighten": 1,
+      "tint": [
+        0.7,
+        0.69,
+        0.66
+      ]
+    },
+    {
+      "name": "meus/predio_sanzio",
+      "file": "predio_sanzio.glb",
+      "scale": 0.01,
+      "cell": 0.35,
+      "skip": [
+        "^car",
+        "^Line",
+        "^Hyophorbe",
+        "^Branche",
+        "^Trunk",
+        "^Plane"
+      ],
+      "tint": [
+        0.9,
+        0.88,
+        0.85
+      ]
+    },
+    {
+      "name": "meus/complexo_baia",
+      "file": "complexo_moderno.glb",
+      "scale": 20,
+      "cell": 1.2,
+      "tint": [
+        0.74,
+        0.78,
+        0.84
+      ]
+    }
+  ],
+  "user_dir": "assets-src/meus-modelos"
+}

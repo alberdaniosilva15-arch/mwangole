@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-AO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0e1214">
+<title>Mwangolé · Luanda</title>
+<link rel="stylesheet" href="hud.css">
+</head>
+<body>
+<canvas id="game" width="1280" height="720"></canvas>
+<div id="damage"></div>
+
+<div id="boot">
+  <div class="boot-logo">MWANGOLÉ</div>
+  <div class="boot-sub">LUANDA · 16:30</div>
+  <div id="boot-msg">A carregar o mundo...</div>
+  <div class="boot-tag">C++ → WebAssembly · WebGL2</div>
+</div>
+
+<div id="hud">
+  <div id="topleft">
+    <div class="brand">MWANGOLÉ</div>
+    <div class="district">Baixa de Luanda</div>
+    <div id="state">A conduzir</div>
+  </div>
+
+  <div id="topright">
+    <div id="cashline">
+      <div id="cash-pop"></div>
+      <div id="cash">Kz 7.500</div>
+    </div>
+    <div id="wanted"><span>☆</span><span>☆</span><span>☆</span><span>☆</span><span>☆</span></div>
+    <div id="clock">08:38</div>
+    <div id="fps"></div>
+  </div>
+
+  <div id="mapwrap"><canvas id="minimap" width="176" height="176"></canvas></div>
+
+  <div id="health"><div id="health-fill"></div></div>
+
+  <div id="speedo">
+    <div id="kmh">0</div>
+    <div class="unit">KM/H</div>
+    <div id="gear">D</div>
+  </div>
+
+  <div id="job"><div class="job-t"></div><div class="job-s"></div></div>
+  <div id="prompt"></div>
+  <div id="hint">W A S D conduzir · H buzina · E entrar/sair · F trabalho · T +3 h · C câmara · R reiniciar · M som</div>
+
+  <div id="touch">
+    <div id="stick"><div id="knob"></div></div>
+    <div id="pedals">
+      <button id="btnGas" class="tbtn">▲</button>
+      <button id="btnBrake" class="tbtn">▼</button>
+    </div>
+    <div id="actions">
+      <button id="btnHand" class="tbtn small">TRAVÃO</button>
+      <button id="btnAct" class="tbtn small">E</button>
+    </div>
+  </div>
+</div>
+
+<noscript>Precisas de JavaScript para jogar Mwangolé.</noscript>
+<script src="vendor/gsap.min.js"></script>
+<script type="module" src="shell.js"></script>
+</body>
+</html>

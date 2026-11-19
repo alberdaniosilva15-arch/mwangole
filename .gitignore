@@ -1,0 +1,9 @@
+shots/
+node_modules/
+__pycache__/
+*.pyc
+*.o
+*.bc
+*.log
+.DS_Store
+.chrome-profile/
