@@ -96,7 +96,7 @@ inline void init_traffic(std::vector<TrafficCar>& cars, int count, const V3& aro
 }
 
 inline void update_traffic(std::vector<TrafficCar>& cars, const V3& player, float dt,
-                           uint32_t& seed) {
+                           uint32_t& seed, float tnow) {
   for (size_t i = 0; i < cars.size(); ++i) {
     TrafficCar& t = cars[i];
     if (length(t.pos - player) > 480.0f) {
@@ -143,6 +143,19 @@ inline void update_traffic(std::vector<TrafficCar>& cars, const V3& player, floa
     // give way to the player and to the car ahead in the same lane
     V3 f = car_forward(t.yaw);
     V3 right = v3(f.z, 0.0f, -f.x);
+
+    // semaforo: trava antes do cruzamento quando o sinal esta vermelho
+    {
+      int ph = signal_phase_at(tnow);
+      bool ns = (t.dir == 1 || t.dir == 3);
+      bool go = ns ? (ph == 0) : (ph == 2);
+      if (!go) {
+        V3 node = {NODE + CELL * (float)t.ni, 0.0f, NODE + CELL * (float)t.nj};
+        V3 rel = node - t.pos;
+        float fd = rel.x * f.x + rel.z * f.z;
+        if (fd > 12.0f && fd < 20.0f) target = std::min(target, (fd - 12.5f) * 2.2f);
+      }
+    }
     auto slows_for = [&](const V3& p, float extra) {
       V3 rel = p - t.pos;
       float fd = rel.x * f.x + rel.z * f.z;

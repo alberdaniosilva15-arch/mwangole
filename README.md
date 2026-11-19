@@ -27,10 +27,10 @@ por isso não é preciso compilar para jogar.
 ## Estado do desenvolvimento
 
 Tabela completa por fase em [`PLANO.md`](PLANO.md) (secção 0-A). Resumo:
-M0–M3 feitos · M4 cidade com lógica 25% · M5 economia/save 20% · M6 combate 0% ·
-M7 conversas 0% · M8 missões 15% (só loop de estafeta) · M9 polimento 50%.
+M0–M4 feitos (cidade com distritos, POIs e semáforos) · M5 economia/save 20% ·
+M6 combate 0% · M7 conversas 0% · M8 missões 15% (só loop de estafeta) · M9 polimento 50%.
 
-Próximo por impacto: M5 → M8 → M6 → M4 → M7 → M9.
+Próximo por impacto: M5 → M8 → M6 → M7 → M9.
 
 ## Comandos
 
@@ -39,7 +39,7 @@ Próximo por impacto: M5 → M8 → M6 → M4 → M7 → M9.
 | `W A S D` / setas | Conduzir / andar |
 | `Shift` | Correr |
 | `Espaço` | Travão de mão |
-| `E` | Entrar / sair do carro |
+| `E` | Entrar / sair do carro, entrar num POI (a pé) |
 | `F` | Iniciar trabalho de estafeta |
 | `T` | Adiantar 3 horas (ciclo dia/noite) |
 | `C` | Alternar câmara |
@@ -47,9 +47,16 @@ Próximo por impacto: M5 → M8 → M6 → M4 → M7 → M9.
 | `H` / `M` | Buzina / som |
 | Rato | Olhar em volta |
 
-**Estafeta**: prime `F` para aceitar um trabalho, segue o marcador azul no mínimo
-e no mundo (coluna luminosa), recolhe a encomenda e entrega-a no marcador laranja
-antes do tempo acabar. A paga depende da distância.
+**Estafeta**: prime `F` para aceitar um trabalho (ou `E` na Garagem do Musseque),
+segue o marcador azul no mínimo e no mundo (coluna luminosa), recolhe a encomenda e
+entrega-a no marcador laranja antes do tempo acabar. A paga depende da distância.
+
+**Cidade**: quatro zonas com arquitectura própria — Baixa (torres do centro),
+Cidade Alta/Kilamba (a leste), Musseque (casas baixas a oeste e a norte) e Ilha do
+Cabo (areal com quiosques, ligada por uma ponte na Marginal). O distrito actual
+aparece no HUD. No minimapa há ícones com legenda para casas à venda, mercearia,
+restaurante, garagem, loja de armas e contactos de missão; chega-te ao poste com a
+placa luminosa e prime `E`.
 
 ## Compilar
 

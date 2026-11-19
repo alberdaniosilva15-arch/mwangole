@@ -133,6 +133,12 @@ static Mesh g_beacon_drop;
 static char g_job_msg[72] = "";
 static float g_job_msg_t = 0.0f;
 
+static int g_poi_near = -1;
+static float g_poi_dist = 1e9f;
+static bool g_poi_bought[16] = {false};
+static Mesh g_signal_masts;
+static Mesh g_signal_lamps[4];
+
 static float g_render_scale = 1.0f;
 static double g_quality_time = 0.0;
 static int g_quality_frames = 0;
@@ -205,6 +211,14 @@ EM_JS(void, mw_map_js, (int ptr, int count), {
   }
 });
 
+EM_JS(void, mw_pois_js, (int ptr, int count), {
+  try {
+    window.__mwPois = HEAPF32.slice(ptr >> 2, (ptr >> 2) + count * 3);
+  } catch (e) {
+    window.__mwPois = new Float32Array(0);
+  }
+});
+
 EM_JS(void, mw_set_scale_js, (float s), {
   const c = document.getElementById('game');
   if (!c) return;
@@ -253,6 +267,15 @@ EM_JS(void, mw_hud, (float kmh, float health, float cash, int wanted, int in_car
   window.__mwInCar = !!in_car_arg;
   const gear = $('gear');
   if (gear) gear.textContent = in_car_arg ? 'D' : '—';
+  const dz = $('district');
+  if (dz) {
+    let name = 'Musseque';
+    if (z <= -860) name = 'Ilha do Cabo';
+    else if (z < -660) name = 'Marginal';
+    else if (x > -260 && x < 700 && z > 40 && z < 760) name = 'Baixa';
+    else if (x > 700) name = 'Cidade Alta';
+    if (dz.textContent !== name) dz.textContent = name;
+  }
   if (window.__mwHudAnim) window.__mwHudAnim(kmh, health, cash, wanted, !!in_car_arg, UTF8ToString(prompt));
 
   const cv = $('minimap');
@@ -261,6 +284,7 @@ EM_JS(void, mw_hud, (float kmh, float health, float cash, int wanted, int in_car
     const W = cv.width, H = cv.height;
     const scale = 0.29;
     const cx = W / 2, cy = H / 2;
+    const POI_COL = ['#59e873', '#ffc33a', '#ff5c42', '#61a8ff', '#c77aff', '#38dcff', '#fff05c'];
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#161c1e';
     ctx.fillRect(0, 0, W, H);
@@ -311,6 +335,38 @@ EM_JS(void, mw_hud, (float kmh, float health, float cash, int wanted, int in_car
     if (iy1 > 0 && iy0 < H) {
       ctx.fillStyle = '#7d6f4e';
       ctx.fillRect(cx + (-820 - x) * scale, iy0, 1580 * scale, iy1 - iy0);
+    }
+    // ponte para a ilha
+    const by0 = cy + (-1022 - z) * scale, by1 = cy + (-843 - z) * scale;
+    if (by1 > 0 && by0 < H) {
+      ctx.fillStyle = '#4c5354';
+      ctx.fillRect(cx + (0 - x) * scale - 6 * scale, by0, 12 * scale, by1 - by0);
+    }
+    // POIs
+    const pois = window.__mwPois;
+    if (pois) {
+      for (let i = 0; i < pois.length; i += 3) {
+        const which = pois[i + 2] | 0;
+        const sx = cx + (pois[i] - x) * scale, sy = cy + (pois[i + 1] - z) * scale;
+        if (sx < 5 || sx > W - 5 || sy < 5 || sy > H - 5) continue;
+        ctx.fillStyle = POI_COL[which] || '#ffffff';
+        ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (which === 5) {
+          ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy); ctx.lineTo(sx, sy + 4);
+          ctx.lineTo(sx - 4, sy);
+        } else if (which === 4) {
+          ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy + 3); ctx.lineTo(sx - 4, sy + 3);
+        } else if (which === 0 || which === 6) {
+          ctx.arc(sx, sy, 3.4, 0, Math.PI * 2);
+        } else {
+          ctx.rect(sx - 3, sy - 3, 6, 6);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     // player marker
     ctx.save();
@@ -410,6 +466,25 @@ EMSCRIPTEN_KEEPALIVE void mw_debug_time(float tod) {
 EMSCRIPTEN_KEEPALIVE void mw_debug_place(float x, float z, float yaw) {
   g_car.pos = {x, 0.0f, z};
   g_car.yaw = yaw;
+  g_car.speed = 0.0f;
+  g_player.pos = {x, 0.0f, z};
+  g_player.yaw = yaw;
+  g_cam_yaw = yaw;
+}
+
+EMSCRIPTEN_KEEPALIVE double mw_debug_tris() {
+  double t = 0.0;
+  for (auto& c : g_city.chunks) {
+    t += (double)c.ground.count + (double)c.bld.count + (double)c.props.count;
+    t += (double)c.treeCount * 64.0 + (double)c.lampCount * 64.0;
+  }
+  t += (double)g_city.promenade.count + (double)g_city.ilha.count + (double)g_city.sea.count;
+  t += (double)g_signal_masts.count + (double)g_signal_lamps[0].count;
+  return t / 3.0;
+}
+
+EMSCRIPTEN_KEEPALIVE void mw_debug_walk(float x, float z, float yaw) {
+  g_in_car = false;
   g_car.speed = 0.0f;
   g_player.pos = {x, 0.0f, z};
   g_player.yaw = yaw;
@@ -620,6 +695,81 @@ static void update_job(float dt) {
     snprintf(g_job_msg, sizeof(g_job_msg), "Entrega concluida: + Kz %d", pay);
     g_job_msg_t = 4.5f;
   }
+}
+
+static void poi_msg(const char* s, float dur = 3.5f) {
+  snprintf(g_job_msg, sizeof(g_job_msg), "%s", s);
+  g_job_msg_t = dur;
+}
+
+static void interact_poi(int idx) {
+  if (idx < 0 || idx >= (int)poi_list().size()) return;
+  const Poi& p = poi_list()[idx];
+  switch (p.kind) {
+    case 0: {
+      int price = 25000;
+      if (std::strstr(p.name, "45")) price = 45000;
+      else if (std::strstr(p.name, "90")) price = 90000;
+      if (g_poi_bought[idx]) {
+        poi_msg("Ja tens esta casa. Bem-vindo a casa.");
+        return;
+      }
+      if (g_cash < (float)price) {
+        poi_msg("Nao tens Kz suficientes para esta casa.");
+        return;
+      }
+      g_cash -= (float)price;
+      g_poi_bought[idx] = true;
+      char b[72];
+      snprintf(b, sizeof(b), "Casa comprada por Kz %d. E tua!", price);
+      poi_msg(b, 4.5f);
+      break;
+    }
+    case 1:
+      if (g_cash < 60.0f) {
+        poi_msg("Sem Kz para a merenda.");
+        return;
+      }
+      g_cash -= 60.0f;
+      g_health = std::min(100.0f, g_health + 25.0f);
+      poi_msg("Merenda comprada: +25 de saude");
+      break;
+    case 2:
+      if (g_cash < 300.0f) {
+        poi_msg("O Kalulu nao fia. Volta com Kz 300.");
+        return;
+      }
+      g_cash -= 300.0f;
+      g_health = 100.0f;
+      poi_msg("Calulu e funge: saude a 100%");
+      break;
+    case 3:
+      if (g_job.stage != JOB_IDLE || g_job.cooldown > 0.0f) {
+        poi_msg("O estafeta esta ocupado.");
+        return;
+      }
+      job_start();
+      break;
+    case 4:
+      poi_msg("Loja do Kambuta: armas chegam numa proxima fase.");
+      break;
+    default:
+      poi_msg("Contacto recebido. Segue o mapa.");
+      break;
+  }
+}
+
+static void render_signals(const V3& eye, const Mat4& vp) {
+  if (!g_signal_masts.count) return;
+  glUseProgram(g_world.id);
+  glUniformMatrix4fv(g_world.vp, 1, GL_FALSE, vp.m);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D_ARRAY, g_atlas);
+  glUniform1i(g_world.atlas, 0);
+  set_common_uniforms(g_world.sunDir, g_world.sunCol, g_world.ambSky, g_world.ambGround,
+                      g_world.camPos, g_world.fogCol, g_world.fogNear, g_world.fogFar, eye);
+  draw_mesh(g_signal_masts);
+  draw_mesh(g_signal_lamps[signal_phase_at(g_time)]);
 }
 
 static void render_beacons(const V3& eye, const Mat4& vp) {
@@ -841,6 +991,23 @@ static void frame() {
   }
 
   float near_car = length(g_player.pos - g_car.pos);
+  {
+    float poi_d = 1e9f;
+    int poi_near = -1;
+    if (!g_in_car) {
+      const auto& pl = poi_list();
+      for (size_t i = 0; i < pl.size(); ++i) {
+        float d = length(v3(pl[i].x, 0.0f, pl[i].z) - g_player.pos);
+        if (d < poi_d) {
+          poi_d = d;
+          poi_near = (int)i;
+        }
+      }
+      if (poi_d > 5.5f) poi_near = -1;
+    }
+    g_poi_near = poi_near;
+    g_poi_dist = poi_d;
+  }
   if (g_want_exit) {
     g_want_exit = 0;
     if (g_in_car) {
@@ -856,6 +1023,8 @@ static void frame() {
       g_player.yaw = g_car.yaw;
       g_in_car = false;
       g_car.speed = 0.0f;
+    } else if (g_poi_near >= 0 && g_poi_dist < near_car) {
+      interact_poi(g_poi_near);
     } else if (near_car < 4.4f) {
       g_in_car = true;
       g_cam_yaw = g_car.yaw;
@@ -885,7 +1054,7 @@ static void frame() {
   V3 eye, target;
   update_camera(dt, eye, target);
 
-  update_traffic(g_traffic, g_in_car ? g_car.pos : g_player.pos, dt, g_street_seed);
+  update_traffic(g_traffic, g_in_car ? g_car.pos : g_player.pos, dt, g_street_seed, g_time);
   update_peds(g_peds, g_in_car ? g_car.pos : g_player.pos, dt, g_street_seed);
   {
     V3 at = g_in_car ? g_car.pos : g_player.pos;
@@ -968,6 +1137,7 @@ static void frame() {
   glDepthMask(GL_TRUE);
 
   render_world(fr, eye, vp, g_time);
+  render_signals(eye, vp);
   render_water(fr, eye, vp, g_time);
   render_cars(eye, vp);
   render_cop_lights(eye, vp);
@@ -987,8 +1157,12 @@ static void frame() {
     g_hud_timer = g_time;
     float kmh = std::fabs(g_car.speed) * 3.6f;
     const char* prompt = "";
+    char prompt_buf[96];
     if (g_in_car) {
       prompt = "E · Sair do carro";
+    } else if (g_poi_near >= 0 && g_poi_dist < near_car) {
+      snprintf(prompt_buf, sizeof(prompt_buf), "E · %s", poi_list()[g_poi_near].name);
+      prompt = prompt_buf;
     } else if (near_car < 4.4f) {
       prompt = "E · Entrar no carro";
     } else if (g_job.stage == JOB_PICK) {
@@ -1146,6 +1320,17 @@ int main() {
   }
 
   build_city(g_city, g_tree_mesh, g_lamp_mesh);
+  g_signal_masts = make_signal_masts();
+  for (int i = 0; i < 4; ++i) g_signal_lamps[i] = make_signal_lamps(i);
+  {
+    std::vector<float> pd;
+    for (const auto& p : poi_list()) {
+      pd.push_back(p.x);
+      pd.push_back(p.z);
+      pd.push_back((float)p.kind);
+    }
+    if (!pd.empty()) mw_pois_js((int)(size_t)pd.data(), (int)(pd.size() / 3));
+  }
 
   for (auto& c : g_city.chunks) {
     for (auto& b : c.colliders) g_cols.push_back(b);
@@ -1154,6 +1339,10 @@ int main() {
   g_parked.push_back({v3(87.0f, 0.0f, 470.0f), 3.14159265f, tint3(0.78f, 0.79f, 0.80f)});
   g_parked.push_back({v3(191.0f, 0.0f, 150.0f), 0.0f, tint3(0.86f, 0.84f, 0.78f)});
   g_parked.push_back({v3(295.0f, 0.0f, 560.0f), 0.0f, tint3(0.24f, 0.56f, 0.38f)});
+  // candongueiros na praca (azul e branco)
+  g_parked.push_back({v3(87.0f, 0.0f, 438.0f), 3.14159265f, tint3(0.26f, 0.38f, 0.66f)});
+  g_parked.push_back({v3(87.0f, 0.0f, 500.0f), 3.14159265f, tint3(0.86f, 0.87f, 0.82f)});
+  g_parked.push_back({v3(201.0f, 0.0f, 470.0f), 0.0f, tint3(0.42f, 0.52f, 0.72f)});
   for (const auto& p : g_parked) {
     g_cols.push_back({{p.pos.x - 1.2f, -1.0f, p.pos.z - 2.4f},
                       {p.pos.x + 1.2f, 1.6f, p.pos.z + 2.4f}});

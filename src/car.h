@@ -494,7 +494,15 @@ inline void resolve_circle(V3& p, float r, const AABB& b, bool& hit) {
 inline void clamp_world(V3& p, float margin) {
   const float lim = 1660.0f - margin;
   p.x = clampf(p.x, -lim, lim);
-  p.z = clampf(p.z, -828.0f + margin, lim);
+  if (std::fabs(p.x) < 12.0f) {
+    // corredor da ponte para a Ilha do Cabo
+    p.z = clampf(p.z, -1100.0f + margin, lim);
+  } else if (p.z < -925.0f) {
+    // areal da ilha (fora da ponte)
+    p.z = clampf(p.z, -1100.0f + margin, -1022.0f + margin);
+  } else {
+    p.z = clampf(p.z, -828.0f + margin, lim);
+  }
 }
 
 inline bool update_car(Car& car, float throttle, float brake, float steer, float handbrake,

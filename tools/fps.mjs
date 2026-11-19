@@ -39,7 +39,8 @@ while (Date.now() - t0 < 40000) {
 }
 await sleep(1500);
 await evalJs(`window.__mwModule._mw_debug_place(${x},${z},${yaw})`);
-for (let i = 0; i < 6; ++i) {
+console.log('assets', JSON.stringify(await evalJs('window.__mwAssets')));
+for (let i = 0; i < 4; ++i) {
   await sleep(3000);
   console.log('t+' + ((i + 1) * 3) + 's fps', await evalJs('window.__mwFps'));
 }

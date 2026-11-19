@@ -171,14 +171,142 @@ inline bool downtown_area(float px, float pz) {
   return px > -260.0f && px < 700.0f && pz > 40.0f && pz < 760.0f;
 }
 
-inline const char* pick_lot_model(uint32_t& s, bool down) {
+enum District { D_BAIXA = 0, D_ALTA = 1, D_MUSSEQUE = 2 };
+
+// faixa da baía (pz < 780) reparte-se entre Baixa (centro) e Cidade Alta/Kilamba
+// (flancos leste/oeste); tudo a norte das últimas filas é musseque.
+inline int district_at(float px, float pz) {
+  if (downtown_area(px, pz)) return D_BAIXA;
+  if (px > 700.0f && pz > -860.0f && pz < 1660.0f) return D_ALTA;
+  return D_MUSSEQUE;
+}
+
+// ---------------------------------------------------------------- POIs
+
+struct Poi {
+  const char* name;
+  int kind;  // 0 casa, 1 mercearia, 2 restaurante, 3 garagem, 4 armas, 5 missao, 6 candongueiro
+  float x, z;
+};
+
+inline std::vector<Poi>& poi_list() {
+  static std::vector<Poi> v;
+  return v;
+}
+
+struct PoiBlock {
+  float px, pz;
+  const char* model;
+  int kind;
+  const char* name;
+};
+
+inline const PoiBlock* poi_block_at(float px, float pz) {
+  static const PoiBlock list[] = {
+      {0.0f, 104.0f, "comercial/mercado", 1, "Mercearia do Bairro"},
+      {104.0f, 104.0f, "comercial/restaurante", 2, "Restaurante Kalulu"},
+      {208.0f, 208.0f, "meus/loja_downtown", 4, "Loja do Kambuta"},
+      {0.0f, 312.0f, "industrial/oficina", 3, "Garagem do Musseque"},
+      {-104.0f, 208.0f, "meus/predio_residencial", 0, "Apartamento 25 000 Kz"},
+      {-104.0f, 416.0f, "meus/predio_residencial_b", 0, "Apartamento 45 000 Kz"},
+      {208.0f, 416.0f, "meus/predio_residencial_c", 0, "Apartamento 90 000 Kz"},
+      {312.0f, 104.0f, "comercial/banco", 5, "Contacto: Kixikila"},
+      {312.0f, 416.0f, "publicos/prefeitura", 5, "Contacto: A encomenda"},
+      {-104.0f, 104.0f, "publicos/museu", 5, "Contacto: Corrida na Ilha"},
+      {104.0f, 416.0f, nullptr, 6, "Praca dos candongueiros"},
+  };
+  for (const auto& b : list) {
+    if (b.px == px && b.pz == pz) return &b;
+  }
+  return nullptr;
+}
+
+inline uint32_t poi_color(int kind) {
+  switch (kind) {
+    case 0: return tint3(0.35f, 0.95f, 0.45f);
+    case 1: return tint3(1.00f, 0.76f, 0.22f);
+    case 2: return tint3(1.00f, 0.36f, 0.26f);
+    case 3: return tint3(0.38f, 0.66f, 1.00f);
+    case 4: return tint3(0.78f, 0.46f, 1.00f);
+    case 5: return tint3(0.22f, 0.86f, 1.00f);
+    default: return tint3(1.00f, 0.94f, 0.32f);
+  }
+}
+
+inline Poi poi_from_block(const PoiBlock& p) {
+  return {p.name, p.kind, p.px + BLOCK - 2.0f, p.pz + BLOCK * 0.5f};
+}
+
+inline void add_poi_sign(Builder& b, const PoiBlock& p) {
+  float x = p.px + BLOCK - 2.0f;
+  float z = p.pz + BLOCK * 0.5f;
+  uint32_t col = poi_color(p.kind);
+  b.box(x - 0.07f, z - 0.07f, x + 0.07f, z + 0.07f, 0.16f, 2.45f, L_CONCRETE,
+        tint3(0.26f, 0.27f, 0.29f), 0, 2.0f, false);
+  b.box(x - 0.06f, z - 0.80f, x + 0.10f, z + 0.80f, 2.05f, 2.70f, L_EMIT, col, 0, 1.0f, false);
+  b.top(x - 1.7f, z - 1.7f, x + 1.7f, z + 1.7f, 0.176f, L_SIDEWALK,
+        tint3(0.82f, 0.80f, 0.76f), 3.0f);
+}
+
+// ---------------------------------------------------------------- sinais
+
+struct SignalLight {
+  float x, z;
+};
+
+inline std::vector<SignalLight>& signal_list() {
+  static std::vector<SignalLight> v;
+  return v;
+}
+
+inline void build_signals() {
+  auto& v = signal_list();
+  if (!v.empty()) return;
+  for (int j = 0; j < 4; ++j) {
+    for (int i = 0; i < 4; ++i) {
+      v.push_back({94.0f + 104.0f * (float)i, 94.0f + 104.0f * (float)j});
+    }
+  }
+}
+
+// ciclo de 12 s: 0 NS verde, 1 NS ambar, 2 EW verde, 3 EW ambar
+inline int signal_phase_at(float t) {
+  float ph = t - std::floor(t / 12.0f) * 12.0f;
+  if (ph < 5.0f) return 0;
+  if (ph < 6.0f) return 1;
+  if (ph < 11.0f) return 2;
+  return 3;
+}
+
+inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
   float r = frand(s);
-  if (!down) {
+  if (dist == D_MUSSEQUE) {
     static const char* houses[] = {
-      "meus/casa_kj", "meus/casa_estudio", "residencial/casa_simples", "residencial/casa_sobrado",
-      "residencial/casas_geminadas", "comercial/loja_esquina", "comercial/mercado",
+      "meus/casa_kj", "meus/casa_estudio", "residencial/casa_simples",
+      "residencial/casa_sobrado", "residencial/casas_geminadas",
+      "comercial/loja_esquina", "comercial/mercado",
     };
     return houses[(int)(r * 7) % 7];
+  }
+  if (dist == D_ALTA) {
+    if (!lod1 && r < 0.40f) {
+      static const char* towers[] = {
+        "residencial/predio_alto", "residencial/predio_apartamentos",
+        "meus/predio_moderno", "meus/predio_vidro", "meus/predio_escritorio_b",
+        "meus/predio_moderno_b",
+      };
+      return towers[(int)(frand(s) * 6) % 6];
+    }
+    if (r < 0.86f) {
+      static const char* mid[] = {
+        "meus/predio_residencial", "meus/predio_residencial_b", "meus/predio_residencial_c",
+        "meus/predio_brownstone", "meus/predio_brownstone_b", "comercial/banco",
+        "publicos/escola", "publicos/hospital", "publicos/biblioteca", "meus/predio_classico",
+      };
+      return mid[(int)(frand(s) * 10) % 10];
+    }
+    static const char* civic[] = {"publicos/escola", "publicos/prefeitura", "publicos/museu"};
+    return civic[(int)(frand(s) * 3) % 3];
   }
   if (r < 0.34f) {
     static const char* towers[] = {
@@ -305,6 +433,53 @@ inline Mesh make_lamp_mesh() {
   return mesh_upload(b.v);
 }
 
+inline Mesh make_signal_masts() {
+  Builder b;
+  for (const auto& sl : signal_list()) {
+    for (int corner = 0; corner < 4; ++corner) {
+      float sx = (corner & 1) ? 1.0f : -1.0f;
+      float sz = (corner & 2) ? 1.0f : -1.0f;
+      float x = sl.x + sx * 11.6f;
+      float z = sl.z + sz * 11.6f;
+      b.box(x - 0.09f, z - 0.09f, x + 0.09f, z + 0.09f, 0.0f, 3.9f, L_CONCRETE,
+            tint3(0.35f, 0.36f, 0.38f), 0, 2.0f, false);
+      b.box(x - 0.22f, z - 0.22f, x + 0.22f, z + 0.22f, 0.0f, 0.18f, L_CONCRETE,
+            tint3(0.28f, 0.28f, 0.30f), 0, 2.0f, false);
+      b.box(x - 0.15f, z - 0.12f, x + 0.15f, z + 0.12f, 2.20f, 3.62f, L_CONCRETE,
+            tint3(0.16f, 0.17f, 0.18f), 0, 1.0f, false);
+    }
+  }
+  return mesh_upload(b.v);
+}
+
+inline Mesh make_signal_lamps(int phase) {
+  Builder b;
+  uint32_t dim = tint3(0.10f, 0.10f, 0.11f);
+  uint32_t red = tint3(1.00f, 0.14f, 0.10f);
+  uint32_t amber = tint3(1.00f, 0.60f, 0.10f);
+  uint32_t green = tint3(0.20f, 0.95f, 0.38f);
+  for (const auto& sl : signal_list()) {
+    for (int corner = 0; corner < 4; ++corner) {
+      float sx = (corner & 1) ? 1.0f : -1.0f;
+      float sz = (corner & 2) ? 1.0f : -1.0f;
+      bool pole_ns = (sx * sz) > 0.0f;
+      bool phase_ns = (phase == 0 || phase == 1);
+      bool phase_amber = (phase == 1 || phase == 3);
+      bool active = (pole_ns == phase_ns);
+      uint32_t cg = dim, ca = dim, cr = dim;
+      if (!active) cr = red;
+      else if (phase_amber) ca = amber;
+      else cg = green;
+      float x = sl.x + sx * 11.6f - sx * 0.20f;
+      float z = sl.z + sz * 11.6f - sz * 0.20f;
+      b.box(x - 0.17f, z - 0.14f, x + 0.17f, z + 0.14f, 2.36f, 2.58f, L_EMIT, cg, 0, 1.0f, false);
+      b.box(x - 0.17f, z - 0.14f, x + 0.17f, z + 0.14f, 2.76f, 2.98f, L_EMIT, ca, 0, 1.0f, false);
+      b.box(x - 0.17f, z - 0.14f, x + 0.17f, z + 0.14f, 3.16f, 3.38f, L_EMIT, cr, 0, 1.0f, false);
+    }
+  }
+  return mesh_upload(b.v);
+}
+
 // ------------------------------------------------------------- chunks
 
 struct Chunk {
@@ -382,10 +557,14 @@ struct LotStyle {
   float layer;
 };
 
-inline LotStyle pick_style(uint32_t& s) {
+inline LotStyle pick_style(uint32_t& s, int dist, bool lod1) {
   float r = frand(s);
   int floors;
-  if (r < 0.60f) floors = 2 + (int)(frand(s) * 5);
+  if (dist == D_MUSSEQUE) floors = 1 + (int)(frand(s) * 3.0f);
+  else if (dist == D_ALTA) {
+    if (lod1) floors = 3 + (int)(frand(s) * 5.0f);
+    else floors = r < 0.30f ? 4 + (int)(frand(s) * 5.0f) : 8 + (int)(frand(s) * 9.0f);
+  } else if (r < 0.60f) floors = 2 + (int)(frand(s) * 5);
   else if (r < 0.82f) floors = 7 + (int)(frand(s) * 6);
   else if (r < 0.95f) floors = 13 + (int)(frand(s) * 8);
   else floors = 21 + (int)(frand(s) * 12);
@@ -394,6 +573,19 @@ inline LotStyle pick_style(uint32_t& s) {
   LotStyle st;
   st.h = h;
   float pick = frand(s);
+  if (dist == D_MUSSEQUE) {
+    if (pick < 0.40f)      { st.tintR = 1.06f * v; st.tintG = 0.93f * v; st.tintB = 0.84f * v; }
+    else if (pick < 0.68f) { st.tintR = 1.08f * v; st.tintG = 0.98f * v; st.tintB = 0.86f * v; }
+    else if (pick < 0.86f) { st.tintR = 0.98f * v; st.tintG = 0.93f * v; st.tintB = 0.86f * v; }
+    else                   { st.tintR = 0.92f * v; st.tintG = 0.90f * v; st.tintB = 0.92f * v; }
+    st.layer = pick < 0.70f ? L_FACADE_B : L_SHOP;
+    return st;
+  }
+  if (dist == D_ALTA && pick < 0.55f) {
+    st.tintR = 0.93f * v; st.tintG = 0.98f * v; st.tintB = 1.03f * v;
+    st.layer = pick < 0.28f ? L_GLASS : L_FACADE_C;
+    return st;
+  }
   if (pick < 0.28f) {
     st.tintR = 1.02f * v; st.tintG = 0.99f * v; st.tintB = 0.93f * v;
   } else if (pick < 0.58f) {
@@ -411,8 +603,8 @@ inline LotStyle pick_style(uint32_t& s) {
 }
 
 inline void build_building(Chunk& c, Builder& bld, float x0, float z0, float x1, float z1,
-                           uint32_t& s, float baseY) {
-  LotStyle st = pick_style(s);
+                           uint32_t& s, float baseY, int dist, bool lod1) {
+  LotStyle st = pick_style(s, dist, lod1);
   uint32_t col = tint3(st.tintR, st.tintG, st.tintB);
   float uOff = frand(s) * 8.0f;
   float h = st.h;
@@ -460,7 +652,7 @@ inline void build_building(Chunk& c, Builder& bld, float x0, float z0, float x1,
             tint3(0.55f, 0.53f, 0.50f), 6.0f);
 
   // ground-floor storefronts + canopy
-  {
+  if (dist != D_MUSSEQUE) {
     uint32_t gc = tint3(0.50f, 0.60f, 0.66f);
     uint32_t cc2 = tint3(0.30f * st.tintR + 0.16f, 0.30f * st.tintG + 0.16f,
                          0.30f * st.tintB + 0.16f);
@@ -550,12 +742,12 @@ inline void build_building(Chunk& c, Builder& bld, float x0, float z0, float x1,
   c.colliders.push_back({{x0 - 0.35f, -1.0f, z0 - 0.35f}, {x1 + 0.35f, h, z1 + 0.35f}});
 }
 
-inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, bool down,
+inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
                       float x0, float z0, float x1, float z1, uint32_t& s, float baseY) {
-  const char* name = pick_lot_model(s, down);
+  const char* name = pick_lot_model(s, dist, c.lod1);
   const AssetModel* m = asset_get(name);
   if (!m || m->bounds.mx.x <= m->bounds.mn.x) {
-    build_building(c, bld, x0, z0, x1, z1, s, baseY);
+    build_building(c, bld, x0, z0, x1, z1, s, baseY, dist, c.lod1);
     return;
   }
   float fw = m->bounds.mx.x - m->bounds.mn.x;
@@ -573,9 +765,16 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, bool down,
   tint_verts(bld.v, from, tr2, tg2, tb2);
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
-  bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f,
-          down ? L_SIDEWALK : L_GRASS,
-          down ? tint3(0.68f, 0.66f, 0.63f) : tint3(0.48f, 0.56f, 0.40f), 4.0f);
+  if (dist == D_BAIXA) {
+    bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f, L_SIDEWALK,
+            tint3(0.68f, 0.66f, 0.63f), 4.0f);
+  } else if (dist == D_ALTA) {
+    bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f, L_GRASS,
+            tint3(0.52f, 0.66f, 0.44f), 4.0f);
+  } else {
+    bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f, L_SAND,
+            tint3(0.78f, 0.70f, 0.56f), 4.0f);
+  }
   a.mn.x -= 0.25f; a.mn.z -= 0.25f; a.mx.x += 0.25f; a.mx.z += 0.25f;
   c.colliders.push_back(a);
 }
@@ -664,6 +863,20 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
 
       uint32_t s = lotSeed;
       bool down = downtown_area(px, pz);
+      int dist = district_at(px, pz);
+      const PoiBlock* poi = poi_block_at(px, pz);
+
+      if (poi && poi->kind != 6 && !c.lod1) {
+        const char* model = poi->model ? poi->model : "comercial/loja_esquina";
+        if (place_landmark(c, b, model, px, pz, px + 5.0f, pz + 5.0f, px + BLOCK - 5.0f,
+                           pz + BLOCK - 5.0f, s, 0.16f)) {
+          g.top(px + 4.0f, pz + 4.0f, px + BLOCK - 4.0f, pz + BLOCK - 4.0f, 0.165f,
+                L_SIDEWALK, tint3(0.88f, 0.86f, 0.82f), 5.0f);
+          add_poi_sign(b, *poi);
+          poi_list().push_back(poi_from_block(*poi));
+          continue;
+        }
+      }
 
       const char* special = nullptr;
       if (px == 104.0f && pz == 208.0f) special = "meus/condominio_apartamentos";
@@ -676,7 +889,8 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
         continue;
       }
 
-      bool plaza = frand(s) < 0.15f;
+      float plaza_chance = dist == D_MUSSEQUE ? 0.05f : dist == D_ALTA ? 0.22f : 0.15f;
+      bool plaza = poi ? (poi->kind == 6) : frand(s) < plaza_chance;
       if (plaza) {
         uint32_t gc = tint3(0.85f, 0.9f, 0.85f);
         g.top(px + 8.0f, pz + 8.0f, px + BLOCK - 8.0f, pz + BLOCK - 8.0f, 0.19f, L_GRASS,
@@ -697,6 +911,10 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
                      l ? 1.5708f : -1.5708f);
           }
         }
+        if (poi) {
+          add_poi_sign(b, *poi);
+          poi_list().push_back(poi_from_block(*poi));
+        }
         continue;
       }
 
@@ -710,9 +928,16 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
           uint32_t s2 = hash32(lotSeed ^ (uint32_t)(lx * 7717 + lz * 104729));
           if (frand(s2) < 0.06f) continue;
           float gx0 = px + 4.0f + lx * cellW, gz0 = pz + 4.0f + lz * cellD;
-          g.top(gx0 + 0.4f, gz0 + 0.4f, gx0 + cellW - 0.4f, gz0 + cellD - 0.4f, 0.165f,
-                down ? L_SIDEWALK : L_GRASS,
-                down ? tint3(0.90f, 0.88f, 0.84f) : tint3(0.60f, 0.74f, 0.50f), 5.0f);
+          if (dist == D_BAIXA) {
+            g.top(gx0 + 0.4f, gz0 + 0.4f, gx0 + cellW - 0.4f, gz0 + cellD - 0.4f, 0.165f,
+                  L_SIDEWALK, tint3(0.90f, 0.88f, 0.84f), 5.0f);
+          } else if (dist == D_ALTA) {
+            g.top(gx0 + 0.4f, gz0 + 0.4f, gx0 + cellW - 0.4f, gz0 + cellD - 0.4f, 0.165f,
+                  L_GRASS, tint3(0.60f, 0.74f, 0.50f), 5.0f);
+          } else {
+            g.top(gx0 + 0.4f, gz0 + 0.4f, gx0 + cellW - 0.4f, gz0 + cellD - 0.4f, 0.165f,
+                  L_SAND, tint3(0.82f, 0.74f, 0.60f), 5.0f);
+          }
           float mx = 1.0f + frand(s2) * 2.6f;
           float mz = 1.0f + frand(s2) * 2.6f;
           float x0 = px + 4.0f + lx * cellW + mx;
@@ -724,7 +949,26 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
           if (x1 - x0 < 4.0f || z1 - z0 < 4.0f) continue;
           if (nx > 1 && lx == 0) x0 = px + 4.0f + 0.4f;
           if (nz > 1 && lz == 0) z0 = pz + 4.0f + 0.4f;
-          place_lot(c, b, px, pz, down, x0, z0, x1, z1, s2, 0.16f);
+          place_lot(c, b, px, pz, dist, x0, z0, x1, z1, s2, 0.16f);
+        }
+      }
+
+      if (dist == D_MUSSEQUE) {
+        int stalls = 1 + (int)(frand(s) * 2.0f);
+        for (int st = 0; st < stalls; ++st) {
+          float bx2 = px + 1.7f + frand(s) * 1.4f;
+          float bz2 = pz + 10.0f + frand(s) * (BLOCK - 22.0f);
+          float bw = 0.9f, bd = 2.0f + frand(s) * 0.8f;
+          uint32_t wood = tint3(0.55f, 0.42f, 0.30f);
+          uint32_t cloth = tint3(0.86f, 0.38f + frand(s) * 0.34f, 0.26f);
+          b.box(bx2, bz2, bx2 + bw, bz2 + bd, 0.16f, 0.95f, L_CONCRETE, wood, 0, 2.0f, true);
+          b.box(bx2 - 0.10f, bz2 - 0.12f, bx2 + bw + 0.10f, bz2 + bd + 0.12f, 2.02f, 2.14f,
+                L_FACADE_A, cloth, 0, 2.0f, true);
+          b.box(bx2 + 0.02f, bz2 - 0.06f, bx2 + 0.08f, bz2, 0.16f, 2.10f, L_CONCRETE,
+                tint3(0.42f, 0.42f, 0.42f), 0, 1.5f, false);
+          b.box(bx2 + bw - 0.08f, bz2 + bd, bx2 + bw - 0.02f, bz2 + bd + 0.06f, 0.16f, 2.10f,
+                L_CONCRETE, tint3(0.42f, 0.42f, 0.42f), 0, 1.5f, false);
+          c.colliders.push_back({{bx2, -1.0f, bz2}, {bx2 + bw, 1.2f, bz2 + bd}});
         }
       }
 
@@ -762,13 +1006,38 @@ inline void build_features(City& city, Mesh& treeMesh, Mesh& lampMesh) {
   // promenade along the bay
   b.top(-1700.0f, -843.0f, 1700.0f, -830.0f, 0.18f, L_CONCRETE, 0xffffffff, 5.0f);
   b.wallZ(-1700.0f, 1700.0f, 0.0f, 0.18f, -843.0f, -1, L_CONCRETE, tint3(0.7f, 0.7f, 0.68f), 0, 4.0f);
-  // railing posts + top rail
+  // railing posts + top rail (com abertura para a ponte da Ilha)
   for (int i = 0; i < 170; ++i) {
     float x = -1700.0f + i * 20.0f;
+    if (std::fabs(x) < 20.0f) continue;
     b.box(x - 0.08f, -842.8f, x + 0.08f, -842.4f, 0.18f, 1.25f, L_WHITE,
           tint3(0.8f, 0.8f, 0.78f), 0, 2.0f, false);
   }
-  b.box(-1700.0f, -842.9f, 1700.0f, -842.3f, 1.15f, 1.3f, L_WHITE, tint3(0.8f, 0.8f, 0.78f), 0, 2.0f, false);
+  b.box(-1700.0f, -842.9f, -20.0f, -842.3f, 1.15f, 1.3f, L_WHITE, tint3(0.8f, 0.8f, 0.78f), 0, 2.0f, false);
+  b.box(20.0f, -842.9f, 1700.0f, -842.3f, 1.15f, 1.3f, L_WHITE, tint3(0.8f, 0.8f, 0.78f), 0, 2.0f, false);
+
+  // causeway Marginal -> Ilha do Cabo
+  b.top(-14.0f, -1022.0f, 14.0f, -843.0f, 0.02f, L_SAND, tint3(0.85f, 0.78f, 0.64f), 7.0f);
+  b.top(-7.0f, -1022.0f, 7.0f, -843.0f, 0.10f, L_ASPHALT, 0xffffffff, 8.0f);
+  b.wallZ(-14.0f, -7.0f, -0.6f, 0.10f, -1020.0f, -1, L_SAND, tint3(0.78f, 0.72f, 0.58f), 0, 7.0f);
+  b.wallZ(7.0f, 14.0f, -0.6f, 0.10f, -1020.0f, -1, L_SAND, tint3(0.78f, 0.72f, 0.58f), 0, 7.0f);
+  for (int i = 0; i < 2; ++i) {
+    float x = i ? 6.4f : -6.4f;
+    b.top(x - 0.12f, -1018.0f, x + 0.12f, -847.0f, 0.112f, L_WHITE,
+          tint3(0.70f, 0.68f, 0.62f), 8.0f);
+  }
+  for (int i = 0; i < 14; ++i) {
+    float z = -850.0f - (float)i * 12.0f;
+    b.top(-0.12f, z, 0.12f, z + 5.0f, 0.112f, L_WHITE, tint3(0.72f, 0.70f, 0.64f), 8.0f);
+  }
+  for (int i = 0; i < 16; ++i) {
+    float z = -847.0f - (float)i * 11.5f;
+    for (int side = 0; side < 2; ++side) {
+      float x = side ? 13.4f : -13.4f;
+      b.box(x - 0.05f, z - 0.05f, x + 0.05f, z + 0.05f, 0.02f, 1.1f, L_WHITE,
+            tint3(0.78f, 0.76f, 0.70f), 0, 2.0f, false);
+    }
+  }
 
   // sand beach between promenade and water
   b.top(-1700.0f, -855.0f, 1700.0f, -843.0f, 0.02f, L_SAND, 0xffffffff, 7.0f);
@@ -810,6 +1079,20 @@ inline void build_features(City& city, Mesh& treeMesh, Mesh& lampMesh) {
     float x = -300.0f + i * 320.0f;
     il.box(x - 2.0f, -1022.0f, x + 2.0f, -962.0f, -0.4f, 0.34f, L_CONCRETE,
            tint3(0.62f, 0.58f, 0.5f), 0, 6.0f, true);
+  }
+  // quiosques da Ilha do Cabo
+  for (int i = 0; i < 8; ++i) {
+    float kx = -640.0f + (float)i * 160.0f + frand(sx) * 40.0f;
+    float kz = -1064.0f + frand(sx) * 20.0f;
+    float w = 3.4f, d = 2.6f, h = 2.5f;
+    il.box(kx - w * 0.5f, kz - d * 0.5f, kx + w * 0.5f, kz + d * 0.5f, 0.06f, h,
+           L_FACADE_A, tint3(0.93f, 0.86f, 0.74f), frand(sx) * 4.0f, 6.0f, true);
+    il.box(kx - w * 0.5f - 0.25f, kz - d * 0.5f - 0.25f, kx + w * 0.5f + 0.25f,
+           kz + d * 0.5f + 0.25f, h, h + 0.18f, L_ROOF, tint3(0.62f, 0.46f, 0.30f), 0, 6.0f,
+           true);
+    il.box(kx - w * 0.5f + 0.2f, kz - d * 0.5f - 0.05f, kx + w * 0.5f - 0.2f,
+           kz - d * 0.5f + 0.12f, h - 0.55f, h - 0.18f, L_EMIT, tint3(1.00f, 0.72f, 0.30f), 0,
+           1.0f, false);
   }
   city.ilha = mesh_upload(il.v);
 
@@ -863,6 +1146,7 @@ inline void build_features(City& city, Mesh& treeMesh, Mesh& lampMesh) {
 }
 
 inline void build_city(City& city, Mesh& treeMesh, Mesh& lampMesh) {
+  build_signals();
   city.chunks.resize(12);
   int idx = 0;
   for (int cz = -1; cz <= 1; ++cz) {
