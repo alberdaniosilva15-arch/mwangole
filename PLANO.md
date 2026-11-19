@@ -1,11 +1,11 @@
 # PLANO MWANGOLÉ — de cidade de caixas a jogo GTA em Luanda
 
-> Documento de direcção. Última actualização: 2026-11-17.
-> Estado: M0–M2 concluídos (motor, condução, trânsito, peões, polícia, áudio).
+> Documento de direcção. Última actualização: 2026-11-19.
+> Estado: M0–M3 concluídos; M4, M5, M8 e M9 em curso (tabela em baixo).
 
 ---
 
-## 0. Diagnóstico honesto (porque é que está tudo quadrado)
+## 0. Diagnóstico honesto (histórico — escrito a 2026-11-17, já resolvido em M3)
 
 | O que parece | O que é na realidade |
 |---|---|
@@ -15,6 +15,25 @@
 | Sem armas, sem conversas, sem missões | Não implementado. Não há sistema de interacção, inventário, diálogo nem missões. |
 
 **Conclusão:** o motor está sólido (60 fps a 720p, 127 KB de wasm, colisões, IA de trânsito, polícia, áudio). O que falta é o **jogo**: arte real e sistemas de gameplay. Este plano ataca isso por ordem de impacto.
+
+---
+
+## 0-A. Estado actual (2026-11-19) — o que falta
+
+| Fase | Estado | Falta |
+|---|---|---|
+| **M0–M2** motor, condução, trânsito, peões, polícia, áudio | ✅ feito | — |
+| **M3** arte real | ✅ feito | — (extra já incluído: marcos Sketchfab `condominio_apartamentos`/`predio_sanzio`, massing em tiers, montras, contact shadows) |
+| **M4** cidade com lógica | 🟡 25% | **4 distritos em quadrantes** — Baixa existe; faltam Kilamba/Cidade Alta, Musseque e Ilha como distritos com arquitectura própria · **POIs + ícones no minimapa** (casas à venda, garagem, mercearia, restaurante, loja de armas) · **portas interactivas** com prioridade E (porta vs carro vs NPC) · **semáforos** de 12 s nos cruzamentos |
+| **M5** economia e propriedade | 🟡 20% | Já existe **fonte** de dinheiro (estafeta). Falta o **gasto**: casas 25 000 / 45 000 / 90 000 Kz com safehouse e ponto de spawn, garagem, pistola/munições/kit de saúde à venda, menu de compra "À VENDA", **save em localStorage** com versão, casa comprada mostra "TUA" no mapa |
+| **M6** armas e combate | ❌ 0% | Pistola na mão, modo de mira, raycast + tracer/flash/som, dano e quedas, polícia a responder a tiro (3★+), hospital/respawn com −10 % de dinheiro, munição no HUD, teclas 1/2, botões móveis |
+| **M7** conversas e interacção | ❌ 0% | Caixa de diálogo HTML (máquina de escrever, 2–3 opções), guiões pt-AO (3 personagens, vendedores, candongueiro, falas soltas), peões a fugir de tiros, polícia a gritar ordens, telemóvel (J) com mapa/missões/save/estatísticas |
+| **M8** missões | 🟡 15% | O loop **Estafeta** cobre apenas as "entregas aleatórias repetíveis". Falta `missions.h` com `idle→briefing→active→success/fail`, a **cadeia das 5 missões** (Candongueiro 1 500 · Kixikila 3 000 · A encomenda 4 500 · Corrida na Ilha 5 000 · O negócio 8 000 + casa), retry, save a meio, estatísticas |
+| **M9** polimento e publicação | 🟡 50% | ✅ dia/noite · ✅ publicação no GitHub. Falta **Rádio Luanda** (3 faixas WebAudio + locutor), **LOD >150 m**, **menu de definições** (escala/som/qualidade), revisão **mobile** (390×844), `LICENSE`, e GitHub Pages para link público |
+
+**Ordem de maior impacto recomendada:** M5 (economia/save) → M8 (missões com briefing) → M6 (combate) → M4 (distritos/POIs) → M7 → M9.
+
+**Aviso de performance:** o critério de aceitação exige ≥55 fps p50 a 1280×720 no HD 4000; no Chrome headless mediram-se **43–49 fps**. Antes de M6/M9 convém correr `node tools/bench.mjs` no portátil real para decidir se o LOD (M9) tem de subir de prioridade.
 
 ---
 
@@ -385,4 +404,4 @@ MÉTODO DE TRABALHO
 
 ## 8. Resumo de uma linha
 
-O motor já corre a 60 fps; o que falta é **arte real CC0 (M3)**, **cidade com destinos (M4)**, **dinheiro e casas à venda (M5)**, **pistola (M6)**, **conversas (M7)** e **5 missões (M8)** — este documento define o como, o quando e os limites de performance.
+Motor e arte (M0–M3) prontos e publicados; falta **economia e save (M5)**, **cadeia de 5 missões (M8)**, **pistola e combate (M6)**, **distritos e POIs (M4)**, **conversas (M7)** e o resto do polimento (M9) — ver tabela em 0-A.

@@ -24,6 +24,14 @@ python tools/serve.py
 A versão compilada (`web/build/mw.js` + `mw.wasm`) está incluída no repositório,
 por isso não é preciso compilar para jogar.
 
+## Estado do desenvolvimento
+
+Tabela completa por fase em [`PLANO.md`](PLANO.md) (secção 0-A). Resumo:
+M0–M3 feitos · M4 cidade com lógica 25% · M5 economia/save 20% · M6 combate 0% ·
+M7 conversas 0% · M8 missões 15% (só loop de estafeta) · M9 polimento 50%.
+
+Próximo por impacto: M5 → M8 → M6 → M4 → M7 → M9.
+
 ## Comandos
 
 | Tecla | Ação |
