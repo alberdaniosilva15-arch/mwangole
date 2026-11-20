@@ -164,12 +164,38 @@ function downscaleRGBA(t, S) {
 
 function registerTexture(key, t) {
   if (texKeyMap.has(key)) return texKeyMap.get(key);
-  const rgba = downscaleRGBA(t, TEX_SIZE);
+  const src = downscaleRGBA(t, TEX_SIZE);
+  // mild contrast + slight darkening so facade/window detail reads under bright sun
+  const rgba = new Uint8Array(src.length);
+  for (let i = 0; i < src.length; i += 4) {
+    for (let c = 0; c < 3; ++c) {
+      const v = (src[i + c] / 255 - 0.5) * 1.18 + 0.46;
+      rgba[i + c] = Math.max(0, Math.min(255, Math.round(v * 255)));
+    }
+    rgba[i + 3] = src[i + 3];
+  }
   const enc = jpeg.encode({ data: Buffer.from(rgba), width: TEX_SIZE, height: TEX_SIZE }, 82);
   const layer = TEX_BASE + texLayers.length;
   texLayers.push(enc.data);
   texKeyMap.set(key, layer);
   return layer;
+}
+
+// bitmaps sem detalhe (betao/pintura lisa) viram fachada procedural com janelas
+const flatTexCache = new Map();
+function texIsFlat(key, t) {
+  if (flatTexCache.has(key)) return flatTexCache.get(key);
+  const d = downscaleRGBA(t, TEX_SIZE);
+  let s = 0, s2 = 0;
+  const N = TEX_SIZE * TEX_SIZE;
+  for (let p = 0; p < N; ++p) {
+    const l = 0.3 * d[p * 4] + 0.5 * d[p * 4 + 1] + 0.2 * d[p * 4 + 2];
+    s += l; s2 += l * l;
+  }
+  const m = s / N;
+  const flat = Math.sqrt(Math.max(0, s2 / N - m * m)) < 18;
+  flatTexCache.set(key, flat);
+  return flat;
 }
 
 // indice da imagem de cor base, incluindo KHR_materials_pbrSpecularGlossiness
@@ -209,6 +235,23 @@ const SKIN_UV = {
   11: [0.0600, 0.1400],
 };
 
+// kit CC0 buildings ship as flat vertex-colour boxes; skin them with windowed facades
+function skinAuto(name) {
+  return /^(residencial\/predio_|industrial\/|comercial\/(banco|escritorio|hotel|loja_esquina|mercado|restaurante|shopping)|publicos\/(escola|hospital|policia|bombeiros|museu|biblioteca|prefeitura))/.test(name);
+}
+
+// kit GLBs are miniatures placed at 6-9.5x; pre-multiply skin UVs so windows
+// end up at real-world metre scale instead of one window per facade
+function kitUvScale(name) {
+  if (/^meus\//.test(name)) return 1;
+  if (/predio_alto/.test(name)) return 9.5;
+  if (/predio_apartamentos/.test(name)) return 9.0;
+  if (/escritorio|hotel/.test(name)) return 9.0;
+  if (/^publicos\//.test(name)) return 6.2;
+  if (/shopping/.test(name)) return 6.0;
+  return 7.3;
+}
+
 function skinLayerOf(matName, map) {
   const n = matName || '';
   if (map) for (const k of Object.keys(map)) if (new RegExp(k, 'i').test(n)) return map[k];
@@ -222,7 +265,9 @@ function skinLayerOf(matName, map) {
   if (/Facade_FLR_(4|6|8)/i.test(n)) return 'facadeC';
   if (/Facade_FLR_(1|2|3|7)/i.test(n)) return 'facadeA';
   if (/Firstfloor/i.test(n)) return 'facadeA';
-  return 'facadeC';
+  let h = 0;
+  for (let i = 0; i < n.length; ++i) h = (h * 31 + n.charCodeAt(i)) | 0;
+  return ['facadeA', 'facadeB', 'facadeC', 'glass'][Math.abs(h) % 4];
 }
 
 function skinUv(layer, p, n) {
@@ -350,7 +395,7 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
         const img = baseColorImageOf(gltf, mat);
         if (img !== null) {
           const t = textureOf(img);
-          if (t) texLayer = registerTexture(file + '#' + img, t);
+          if (t && !texIsFlat(file + '#' + img, t)) texLayer = registerTexture(file + '#' + img, t);
         }
       }
       const ff = factorOf(mat);
@@ -368,9 +413,23 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
         }
         let vc = col;
         let layer = skinLayer;
+        if (skin && Math.abs(ny) > 0.7 && layer !== 10 && layer !== 11) layer = 3;
         let vuv = null;
         if (texLayer >= TEX_BASE) {
           layer = texLayer; vc = texCol; vuv = [uv[i * 2], uv[i * 2 + 1]];
+        } else if (texMode) {
+          // source material has no bitmap: give concrete/glass bodies a windowed
+          // facade instead of a flat slab so the model still reads as a building
+          let pl;
+          if (Math.abs(ny) > 0.7) pl = 3;
+          else if (ff[2] > ff[0] * 1.15 && ff[2] > ff[1] * 1.05) pl = 7;
+          else if (ff[0] > ff[1] * 1.12 && ff[0] > ff[2] * 1.2) pl = 6;
+          else pl = matIdx % 2 ? 5 : 4;
+          const m = Math.max(ff[0], ff[1], ff[2], 0.001);
+          layer = pl;
+          vc = packColor(Math.round(lin2srgb(ff[0] / m) * 255), Math.round(lin2srgb(ff[1] / m) * 255),
+            Math.round(lin2srgb(ff[2] / m) * 255), Math.round(Math.max(0, Math.min(1, ff[3] === undefined ? 1 : ff[3])) * 255));
+          vuv = skinUv(pl, p, [nx, ny, nz]);
         } else if (!skin && uv && hasTex) {
           const s = sampleHit(mat, uv[i * 2], uv[i * 2 + 1]);
           if (s) vc = packColor(Math.round(s[0] * fr), Math.round(s[1] * fg), Math.round(s[2] * fb), Math.round(s[3] * (fa / 255)));
@@ -438,12 +497,13 @@ function decimate(model, cell) {
     const v = model.verts[i];
     const kx = Math.round(v.p[0] / cell), ky = Math.round(v.p[1] / cell), kz = Math.round(v.p[2] / cell);
     let key = kx + ',' + ky + ',' + kz + ',' + v.layer;
-    if (v.uv) key += ',' + Math.round(v.uv[0] * 96) + ',' + Math.round(v.uv[1] * 96);
+    const keepUv = !!v.uv && v.layer >= TEX_BASE;
+    if (keepUv) key += ',' + Math.round(v.uv[0] * 96) + ',' + Math.round(v.uv[1] * 96);
     let c = map.get(key);
     if (c === undefined) {
       c = acc.length;
       map.set(key, c);
-      acc.push({ p: [kx * cell, ky * cell, kz * cell], n: [0, 0, 0], rgb: [0, 0, 0, 0], uv: [0, 0], hasUv: !!v.uv, count: 0, layer: v.layer });
+      acc.push({ p: [kx * cell, ky * cell, kz * cell], n: [0, 0, 0], rgb: [0, 0, 0, 0], uv: [0, 0], hasUv: keepUv, count: 0, layer: v.layer });
     }
     const a = acc[c];
     a.n[0] += v.n[0]; a.n[1] += v.n[1]; a.n[2] += v.n[2];
@@ -451,7 +511,7 @@ function decimate(model, cell) {
     a.rgb[1] += (v.col >> 8) & 255;
     a.rgb[2] += (v.col >> 16) & 255;
     a.rgb[3] += (v.col >>> 24) & 255;
-    if (v.uv) { a.uv[0] += v.uv[0]; a.uv[1] += v.uv[1]; }
+    if (keepUv) { a.uv[0] += v.uv[0]; a.uv[1] += v.uv[1]; }
     a.count += 1;
     remap[i] = c;
   }
@@ -506,7 +566,9 @@ function writeMwb(models, file) {
       buf.writeFloatLE(v.p[0], p); buf.writeFloatLE(v.p[1], p + 4); buf.writeFloatLE(v.p[2], p + 8);
       buf.writeFloatLE(v.n[0], p + 12); buf.writeFloatLE(v.n[1], p + 16); buf.writeFloatLE(v.n[2], p + 20);
       const layer = v.layer === undefined ? -1 : v.layer;
-      const uv = v.uv ? v.uv : (layer >= 0 && layer < TEX_BASE ? skinUv(layer, v.p, v.n) : [0, 0]);
+      const mul = kitUvScale(m.name);
+      const base = v.uv ? v.uv : (layer >= 0 && layer < TEX_BASE ? skinUv(layer, v.p, v.n) : [0, 0]);
+      const uv = [base[0] * mul, base[1] * mul];
       buf.writeFloatLE(uv[0], p + 24); buf.writeFloatLE(uv[1], p + 28);
       buf.writeFloatLE(layer, p + 32);
       buf.writeUInt32LE(v.col >>> 0, p + 36);
@@ -538,7 +600,7 @@ for (const entry of cfg.models) {
   const cell = e.cell !== undefined ? e.cell : ({ mobiliario: 0.022, vegetacao: 0.025, parques: 0.05, beira_rio: 0.04, veiculos: 0 })[cat] ?? 0.05;
   const pick = e.pick ? (Array.isArray(e.pick) ? e.pick : [e.pick]) : null;
   const skip = e.skip ? e.skip.map((r) => new RegExp(r)) : null;
-  const raw = convertModel(file, e.brighten || 1, pick, !!e.skin, e.skin_map || null, skip,
+  const raw = convertModel(file, e.brighten || 1, pick, !!e.skin || skinAuto(name), e.skin_map || null, skip,
     e.skin_tint || 1, e.tint || null, !!e.tex);
   if (e.scale && e.scale !== 1) {
     for (const v of raw.verts) {

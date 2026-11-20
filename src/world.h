@@ -291,46 +291,45 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
   if (dist == D_ALTA) {
     if (!lod1 && r < 0.40f) {
       static const char* towers[] = {
-        "residencial/predio_alto", "residencial/predio_apartamentos",
         "meus/predio_moderno", "meus/predio_vidro", "meus/predio_escritorio_b",
-        "meus/predio_moderno_b",
+        "meus/predio_moderno_b", "meus/predio_flatiron", "meus/predio_classico",
       };
       return towers[(int)(frand(s) * 6) % 6];
     }
     if (r < 0.86f) {
       static const char* mid[] = {
         "meus/predio_residencial", "meus/predio_residencial_b", "meus/predio_residencial_c",
-        "meus/predio_brownstone", "meus/predio_brownstone_b", "comercial/banco",
-        "publicos/escola", "publicos/hospital", "publicos/biblioteca", "meus/predio_classico",
+        "meus/predio_brownstone", "meus/predio_brownstone_b", "meus/predio_classico",
+        "meus/predio_artdeco", "meus/predio_escritorio", "meus/predio_publico",
+        "residencial/predio_apartamentos",
       };
       return mid[(int)(frand(s) * 10) % 10];
     }
-    static const char* civic[] = {"publicos/escola", "publicos/prefeitura", "publicos/museu"};
+    static const char* civic[] = {"meus/predio_publico", "meus/predio_classico", "publicos/prefeitura"};
     return civic[(int)(frand(s) * 3) % 3];
   }
   if (r < 0.34f) {
     static const char* towers[] = {
-      "residencial/predio_alto", "comercial/escritorio", "comercial/hotel",
-      "residencial/predio_apartamentos", "meus/predio_flatiron", "meus/predio_moderno",
-      "meus/predio_vidro", "meus/predio_escritorio_b",
+      "meus/predio_flatiron", "meus/predio_moderno", "meus/predio_vidro",
+      "meus/predio_escritorio_b", "meus/predio_moderno_b", "meus/predio_classico",
+      "meus/predio_artdeco", "meus/predio_brutalista",
     };
     return towers[(int)(frand(s) * 8) % 8];
   }
   if (r < 0.76f) {
     static const char* mid[] = {
-      "comercial/banco", "comercial/restaurante", "comercial/shopping", "comercial/posto_recarga",
-      "publicos/biblioteca", "publicos/policia", "publicos/bombeiros", "publicos/hospital",
       "meus/predio_classico", "meus/predio_artdeco", "meus/predio_moderno_b", "meus/predio_brutalista",
       "meus/predio_residencial", "meus/predio_residencial_b", "meus/predio_residencial_c",
       "meus/predio_escritorio", "meus/predio_escritorio_c", "meus/predio_escritorio_d",
       "meus/predio_brownstone", "meus/predio_brownstone_b", "meus/loja_downtown",
-      "meus/predio_sanzio",
+      "meus/predio_sanzio", "meus/predio_publico", "meus/predio_escritorio_b",
+      "comercial/shopping", "comercial/restaurante",
     };
-    return mid[(int)(frand(s) * 22) % 22];
+    return mid[(int)(frand(s) * 18) % 18];
   }
   static const char* civic[] = {
-    "publicos/escola", "publicos/prefeitura", "publicos/museu",
-    "residencial/predio_apartamentos", "meus/predio_publico",
+    "meus/predio_publico", "meus/predio_classico", "meus/predio_residencial",
+    "meus/predio_artdeco", "publicos/prefeitura",
   };
   return civic[(int)(frand(s) * 5) % 5];
 }
@@ -760,9 +759,11 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
   float yaw = facing_yaw(bx, bz, cx, cz);
   size_t from = bld.v.v.size();
   append_model(bld.v, *m, cx, cz, yaw, sc, baseY);
-  float tr2, tg2, tb2;
-  lot_palette(s, tr2, tg2, tb2);
-  tint_verts(bld.v, from, tr2, tg2, tb2);
+  if (!m->textured) {
+    float tr2, tg2, tb2;
+    lot_palette(s, tr2, tg2, tb2);
+    tint_verts(bld.v, from, tr2, tg2, tb2);
+  }
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
   if (dist == D_BAIXA) {

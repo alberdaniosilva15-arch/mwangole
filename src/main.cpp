@@ -145,7 +145,7 @@ static int g_quality_frames = 0;
 static double g_hud_timer = 0.0;
 
 static const V3 SPAWN_POS = {97.4f, 0.0f, 248.0f};
-static const float SPAWN_YAW = 3.14159265f;
+static const float SPAWN_YAW = 0.0f;
 
 // ------------------------------------------------------------------ bridge
 
@@ -588,13 +588,13 @@ static void update_time_of_day(float dt) {
   g_day = day;
   g_night = night;
 
-  V3 sun = mixv(v3(1.00f, 0.92f, 0.79f), v3(1.15f, 0.52f, 0.22f), dusk * 0.9f);
+  V3 sun = mixv(v3(0.88f, 0.82f, 0.72f), v3(1.15f, 0.52f, 0.22f), dusk * 0.9f);
   sun = mixv(v3(0.13f, 0.16f, 0.24f), sun, day);
   g_sun_col = sun;
 
-  g_amb_sky = mixv(mixv(v3(0.095f, 0.115f, 0.175f), v3(0.32f, 0.36f, 0.44f), day),
+  g_amb_sky = mixv(mixv(v3(0.095f, 0.115f, 0.175f), v3(0.27f, 0.31f, 0.38f), day),
                    v3(0.30f, 0.20f, 0.15f), dusk * 0.35f);
-  g_amb_gnd = mixv(mixv(v3(0.055f, 0.060f, 0.080f), v3(0.17f, 0.16f, 0.15f), day),
+  g_amb_gnd = mixv(mixv(v3(0.055f, 0.060f, 0.080f), v3(0.145f, 0.135f, 0.125f), day),
                    v3(0.20f, 0.13f, 0.10f), dusk * 0.4f);
   g_fog_col = mixv(mixv(v3(0.060f, 0.080f, 0.125f), v3(0.72f, 0.78f, 0.85f), day),
                    v3(0.86f, 0.55f, 0.35f), dusk * 0.7f);

@@ -55,6 +55,7 @@ struct AssetModel {
   std::vector<uint32_t> idx;
   AABB bounds{};
   int tris = 0;
+  bool textured = false;
   Mesh mesh;
 };
 
@@ -140,6 +141,9 @@ inline bool assets_load(const char* path) {
     m.bounds.mn = {mn[0], mn[1], mn[2]};
     m.bounds.mx = {mx[0], mx[1], mx[2]};
     m.tris = (int)tris;
+    for (const auto& v : m.verts) {
+      if (v.layer >= 15.0f) { m.textured = true; break; }
+    }
     m.mesh = make_mesh(m.verts, m.idx);
     list.push_back(std::move(m));
   }
