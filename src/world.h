@@ -4,17 +4,18 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gfx.h"
 #include "math.h"
 #include "assets.h"
 
-constexpr float TILE = 832.0f;
+constexpr float TILE = 416.0f;
 constexpr float BLOCK = 84.0f;
 constexpr float ROAD = 20.0f;
 constexpr float CELL = BLOCK + ROAD;
-constexpr int GRID = 8;
+constexpr int GRID = 4;
 
 inline float frand(uint32_t& s) {
   s = hash32(s + 0x9e3779b9u);
@@ -519,6 +520,71 @@ inline Mesh make_signal_lamps(int phase) {
   return mesh_upload(b.v);
 }
 
+// ------------------------------------------------------------- LOD distante
+// Simplificacao por agrupamento de vertices sobre a malha ja fundida do chunk.
+// Nao mexe no formato MWB nem no conversor: reduz qualquer geometria a cell metros.
+struct ClusterAcc {
+  float nx = 0, ny = 0, nz = 0;
+  float r = 0, g = 0, b = 0;
+  int n = 0;
+};
+
+inline Verts cluster_simplify(const Verts& src, float cell) {
+  Verts out;
+  if (src.v.empty() || src.i.empty()) return out;
+  out.v.reserve(src.v.size() / 3 + 16);
+  out.i.reserve(src.i.size());
+  // Um vertice novo por chave unica: no pior caso tantos quanto os de origem.
+  std::vector<ClusterAcc> acc(src.v.size() + 16);
+  std::vector<uint32_t> remap(src.v.size(), 0xffffffffu);
+  std::unordered_map<int64_t, uint32_t> seen;
+  seen.reserve(src.v.size() / 2 + 16);
+  auto keyOf = [&](const Vertex& v) -> int64_t {
+    int64_t x = (int64_t)std::floor(v.px / cell) & 0x1FFFFF;
+    int64_t y = (int64_t)std::floor(v.py / cell) & 0x1FFFFF;
+    int64_t z = (int64_t)std::floor(v.pz / cell) & 0x1FFFFF;
+    return (x << 42) ^ (y << 21) ^ z;
+  };
+  auto mapVertex = [&](uint32_t idx) -> uint32_t {
+    uint32_t& slot = remap[idx];
+    if (slot != 0xffffffffu) return slot;
+    const Vertex& v = src.v[idx];
+    int64_t k = keyOf(v);
+    auto it = seen.find(k);
+    if (it != seen.end()) { slot = it->second; return slot; }
+    uint32_t n = (uint32_t)out.v.size();
+    out.v.push_back(v);
+    seen.emplace(k, n);
+    ClusterAcc& a = acc[n];
+    a.nx = v.nx; a.ny = v.ny; a.nz = v.nz;
+    a.r = (float)(v.color & 255);
+    a.g = (float)((v.color >> 8) & 255);
+    a.b = (float)((v.color >> 16) & 255);
+    a.n = 1;
+    slot = n;
+    return n;
+  };
+  for (size_t t = 0; t + 2 < src.i.size(); t += 3) {
+    uint32_t a = mapVertex(src.i[t]);
+    uint32_t b = mapVertex(src.i[t + 1]);
+    uint32_t c = mapVertex(src.i[t + 2]);
+    if (a == b || b == c || a == c) continue;
+    out.i.push_back(a);
+    out.i.push_back(b);
+    out.i.push_back(c);
+  }
+  // medias de normal e cor por vertice agrupado
+  for (size_t k = 0; k < out.v.size(); ++k) {
+    Vertex& v = out.v[k];
+    ClusterAcc& a = acc[k];
+    if (a.n <= 0) continue;
+    float l = std::sqrt(a.nx * a.nx + a.ny * a.ny + a.nz * a.nz);
+    if (l > 1e-4f) { v.nx = a.nx / l; v.ny = a.ny / l; v.nz = a.nz / l; }
+    v.color = rgba((int)(a.r / a.n), (int)(a.g / a.n), (int)(a.b / a.n), (int)((v.color >> 24) & 255));
+  }
+  return out;
+}
+
 // ------------------------------------------------------------- chunks
 
 struct Chunk {
@@ -526,6 +592,7 @@ struct Chunk {
   bool lod1 = false;
   bool built = false;
   Mesh ground, bld, props;
+  Mesh groundFar, bldFar;
   Mesh treeMesh, lampMesh;
   GLuint treeInst = 0, lampInst = 0;
   int treeCount = 0, lampCount = 0;
@@ -1174,6 +1241,12 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
   c.ground = mesh_upload(g.v);
   c.bld = mesh_upload(b.v);
   c.props = mesh_upload(p.v);
+  // LOD distante: so a malha de edificios. O chao e quase todo quads grandes e
+  // nao compensa; as fachadas sao onde esta a massa.
+  {
+    Verts fb = cluster_simplify(b.v, 2.0f);
+    if (fb.i.size() * 2 < b.v.i.size()) c.bldFar = mesh_upload(fb);
+  }
   upload_instances(c);
   c.built = true;
   c.bounds = c.ground.bounds;
@@ -1333,10 +1406,10 @@ inline void build_features(City& city, Mesh& treeMesh, Mesh& lampMesh) {
 inline void build_city(City& city, Mesh& treeMesh, Mesh& lampMesh) {
   build_signals();
   lot_records_clear();
-  city.chunks.resize(12);
+  city.chunks.resize(48);
   int idx = 0;
-  for (int cz = -1; cz <= 1; ++cz) {
-    for (int cx = -2; cx <= 1; ++cx) {
+  for (int cz = -2; cz <= 3; ++cz) {
+    for (int cx = -4; cx <= 3; ++cx) {
       Chunk& c = city.chunks[idx];
       c.cx = cx;
       c.cz = cz;

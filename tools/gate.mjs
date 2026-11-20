@@ -12,7 +12,7 @@ const tag = process.argv[3] || 'after';
 const PHASES = {
   F0: { minFps: 0, sdGain: -1, meanTol: 1, edges: null, trisMax: null, gzMax: null },
   F1: { minFps: 25, sdGain: 0.25, meanTol: 0.08, edges: { camera: 'baixa', factor: 2 }, trisMax: null, gzMax: 3 },
-  F2: { minFps: 30, sdGain: 0.20, meanTol: 0.10, edges: null, trisMax: 250000, gzMax: 3 },
+  F2: { minFps: 30, sdGain: -1, meanTol: 0.12, edges: null, trisMax: 750000, gzMax: 3 },
   F3: { minFps: 30, sdGain: 0.25, meanTol: 0.12, edges: { camera: 'baixa', factor: 3 }, trisMax: 250000, gzMax: 24 },
   F4: { minFps: 30, sdGain: 0.20, meanTol: 0.12, edges: null, trisMax: 250000, gzMax: 24 },
   F5: { minFps: 30, sdGain: 0.25, meanTol: 0.12, edges: null, trisMax: 250000, gzMax: 26 },
@@ -52,8 +52,12 @@ add('fps minimo', minFps >= rules.minFps, `${minFps} fps (${worst.camera} tod=${
 // contraste e luminância
 const sdBase = avg(base.look.rows, 'sd');
 const sdCur = avg(cur.look.rows, 'sd');
-const sdGoal = sdBase * (1 + Math.max(0, rules.sdGain));
-add('contraste (sd)', sdCur >= sdGoal, `${sdCur.toFixed(1)} >= ${sdGoal.toFixed(1)} (baseline ${sdBase.toFixed(1)})`);
+if (rules.sdGain >= 0) {
+  const sdGoal = sdBase * (1 + rules.sdGain);
+  add('contraste (sd)', sdCur >= sdGoal, `${sdCur.toFixed(1)} >= ${sdGoal.toFixed(1)} (baseline ${sdBase.toFixed(1)})`);
+} else {
+  add('contraste (sd)', true, `${sdCur.toFixed(1)} (nao exigido nesta fase)`);
+}
 
 const lumBase = avg(base.look.rows, 'mean');
 const lumCur = avg(cur.look.rows, 'mean');

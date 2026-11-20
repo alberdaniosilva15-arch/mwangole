@@ -480,6 +480,26 @@ EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot(float x, float z) {
 
 EMSCRIPTEN_KEEPALIVE int mw_debug_lot_count() { return (int)lot_records().size(); }
 
+// Triangulos por chunk: "cx,cz,lod1,tris,dist,far|..." para saber onde esta a massa.
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_chunk_stats() {
+  static std::string out;
+  out.clear();
+  char buf[128];
+  const float px = g_in_car ? g_car.pos.x : g_player.pos.x;
+  const float pz = g_in_car ? g_car.pos.z : g_player.pos.z;
+  for (const auto& c : g_city.chunks) {
+    long long t = (long long)(c.ground.count + c.bld.count + c.props.count +
+                              c.treeMesh.count * c.treeCount + c.lampMesh.count * c.lampCount) / 3;
+    const float cx = (c.bounds.mn.x + c.bounds.mx.x) * 0.5f;
+    const float cz = (c.bounds.mn.z + c.bounds.mx.z) * 0.5f;
+    const float d = std::sqrt((px - cx) * (px - cx) + (pz - cz) * (pz - cz));
+    std::snprintf(buf, sizeof(buf), "%d,%d,%d,%lld,%.0f,%d|", c.cx, c.cz, c.lod1 ? 1 : 0, t, d,
+                  d > 220.0f ? 1 : 0);
+    out += buf;
+  }
+  return out.c_str();
+}
+
 // Uma linha por registo: indice, nome, centro, meia-largura, escala, camada, tris.
 EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot_dump(int i) {
   static std::string out;
@@ -879,13 +899,27 @@ static void render_world(const Frustum& fr, const V3& eye, const Mat4& vp, float
   set_common_uniforms(g_world.sunDir, g_world.sunCol, g_world.ambSky, g_world.ambGround,
                       g_world.camPos, g_world.fogCol, g_world.fogNear, g_world.fogFar, eye);
 
+  const float lodDist = 120.0f;
+  const float cullDist = g_fog_far * 1.05f;  // o fog ja saturou: desenhar mais e desperdicio
   for (auto& c : g_city.chunks) {
     if (!c.built) continue;
     if (!aabb_visible(fr, c.bounds)) continue;
-    draw_mesh(c.ground);
-    draw_mesh(c.bld);
-    if (c.treeCount) draw_instanced(c.treeMesh, c.treeCount);
-    if (c.lampCount) draw_instanced(c.lampMesh, c.lampCount);
+    // distancia ao retangulo do chunk, nao ao centro
+    const float ndx = std::max(0.0f, std::max(c.bounds.mn.x - eye.x, eye.x - c.bounds.mx.x));
+    const float ndz = std::max(0.0f, std::max(c.bounds.mn.z - eye.z, eye.z - c.bounds.mx.z));
+    const float d2 = ndx * ndx + ndz * ndz;
+    if (d2 > cullDist * cullDist) continue;
+    const float cxm = (c.bounds.mn.x + c.bounds.mx.x) * 0.5f;
+    const float czm = (c.bounds.mn.z + c.bounds.mx.z) * 0.5f;
+    const float dx = eye.x - cxm, dz = eye.z - czm;
+    const bool far = d2 > lodDist * lodDist;
+    draw_mesh(far && c.groundFar.count ? c.groundFar : c.ground);
+    draw_mesh(far && c.bldFar.count ? c.bldFar : c.bld);
+    if (!far) {
+      draw_mesh(c.props);
+      if (c.treeCount) draw_instanced(c.treeMesh, c.treeCount);
+      if (c.lampCount) draw_instanced(c.lampMesh, c.lampCount);
+    }
   }
 
   if (aabb_visible(fr, g_city.promenade.bounds)) draw_mesh(g_city.promenade);
