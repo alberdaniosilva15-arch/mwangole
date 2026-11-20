@@ -27,8 +27,12 @@ FLAGS = [
     "-sINITIAL_MEMORY=134217728",
     "-sSTACK_SIZE=1048576",
     "-sASSERTIONS=0",
+    "-I",
+    os.path.join(EMSDK, "upstream", "emscripten", "third_party"),
     "--preload-file",
     os.path.join(ROOT, "web", "assets", "city.mwb") + "@/assets/city.mwb",
+    "--preload-file",
+    os.path.join(ROOT, "web", "assets", "citytex.bin") + "@/assets/citytex.bin",
     "-lGL",
 ]
 

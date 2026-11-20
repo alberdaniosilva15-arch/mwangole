@@ -1277,7 +1277,7 @@ int main() {
     return 0;
   }
 
-  g_atlas = make_atlas(256);
+  g_atlas = make_atlas(256, assets_load_textures("/assets/citytex.bin", 256));
   if (!g_atlas) {
     mw_fail_js("Falha ao criar o atlas de texturas.");
     return 0;

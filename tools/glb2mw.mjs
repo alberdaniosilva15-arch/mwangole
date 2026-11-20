@@ -134,6 +134,65 @@ function lin2srgb(c) {
   return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
 }
 
+// ---- texturas reais: camadas 15+ no atlas 2D array do motor ----
+const TEX_BASE = 15;
+const TEX_SIZE = 256;
+const texLayers = [];          // buffers JPEG prontos para citytex.bin
+const texKeyMap = new Map();   // file#imgIdx -> layer
+
+function downscaleRGBA(t, S) {
+  if (t.w === S && t.h === S) return t.d;
+  const out = new Uint8Array(S * S * 4);
+  const sx = t.w / S, sy = t.h / S;
+  for (let y = 0; y < S; ++y) {
+    const y0 = Math.floor(y * sy), y1 = Math.max(y0 + 1, Math.floor((y + 1) * sy));
+    for (let x = 0; x < S; ++x) {
+      const x0 = Math.floor(x * sx), x1 = Math.max(x0 + 1, Math.floor((x + 1) * sx));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = y0; yy < y1 && yy < t.h; ++yy) {
+        for (let xx = x0; xx < x1 && xx < t.w; ++xx) {
+          const i = (yy * t.w + xx) * 4;
+          r += t.d[i]; g += t.d[i + 1]; b += t.d[i + 2]; a += t.d[i + 3]; n++;
+        }
+      }
+      const o = (y * S + x) * 4, inv = 1 / (n || 1);
+      out[o] = r * inv; out[o + 1] = g * inv; out[o + 2] = b * inv; out[o + 3] = a * inv;
+    }
+  }
+  return out;
+}
+
+function registerTexture(key, t) {
+  if (texKeyMap.has(key)) return texKeyMap.get(key);
+  const rgba = downscaleRGBA(t, TEX_SIZE);
+  const enc = jpeg.encode({ data: Buffer.from(rgba), width: TEX_SIZE, height: TEX_SIZE }, 82);
+  const layer = TEX_BASE + texLayers.length;
+  texLayers.push(enc.data);
+  texKeyMap.set(key, layer);
+  return layer;
+}
+
+// indice da imagem de cor base, incluindo KHR_materials_pbrSpecularGlossiness
+function baseColorImageOf(gltf, mat) {
+  const pbr = mat.pbrMetallicRoughness || {};
+  let bt = pbr.baseColorTexture;
+  if (!bt && mat.extensions && mat.extensions.KHR_materials_pbrSpecularGlossiness) {
+    bt = mat.extensions.KHR_materials_pbrSpecularGlossiness.diffuseTexture;
+  }
+  if (!bt || !gltf.textures) return null;
+  const tex = gltf.textures[bt.index];
+  return tex && tex.source !== undefined ? tex.source : null;
+}
+
+function factorOf(mat) {
+  const pbr = mat.pbrMetallicRoughness || {};
+  let f = pbr.baseColorFactor;
+  if (!f && mat.extensions && mat.extensions.KHR_materials_pbrSpecularGlossiness) {
+    f = mat.extensions.KHR_materials_pbrSpecularGlossiness.diffuseFactor;
+  }
+  return f || [1, 1, 1, 1];
+}
+
 // camadas do atlas do motor (ver enum Layer em src/gfx.h)
 const SKIN_LAYER = {
   white: 0, asphalt: 1, sidewalk: 2, roof: 3, facadeA: 4, facadeB: 5, facadeC: 6,
@@ -176,7 +235,7 @@ function skinUv(layer, p, n) {
 }
 
 function convertModel(file, bright = 1, pick = null, skin = false, skinMap = null, skip = null,
-                      skinTint = 1, tintMul = null) {
+                      skinTint = 1, tintMul = null, texMode = false) {
   const { gltf, bin } = parseGlb(file);
   const verts = [];
   const idx = [];
@@ -286,6 +345,18 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
       const col = skin ? tintOf(matIdx) : colorOf(matIdx);
       const uv = prim.attributes.TEXCOORD_0 !== undefined ? readAccessorFloat(gltf, bin, prim.attributes.TEXCOORD_0) : null;
       const hasTex = !!(mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorTexture);
+      let texLayer = -1;
+      if (texMode && uv) {
+        const img = baseColorImageOf(gltf, mat);
+        if (img !== null) {
+          const t = textureOf(img);
+          if (t) texLayer = registerTexture(file + '#' + img, t);
+        }
+      }
+      const ff = factorOf(mat);
+      const texCol = packColor(Math.round(lin2srgb(ff[0] * bright) * 255),
+        Math.round(lin2srgb(ff[1] * bright) * 255), Math.round(lin2srgb(ff[2] * bright) * 255),
+        Math.round(Math.max(0, Math.min(1, ff[3] === undefined ? 1 : ff[3])) * 255));
       const fr = ((col & 255) / 255), fg = (((col >> 8) & 255) / 255), fb = (((col >> 16) & 255) / 255), fa = ((col >>> 24) & 255);
       for (let i = 0; i < cnt; ++i) {
         const p = xformPoint(world, pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
@@ -296,7 +367,11 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
           nx = t[0] / l; ny = t[1] / l; nz = t[2] / l;
         }
         let vc = col;
-        if (!skin && uv && hasTex) {
+        let layer = skinLayer;
+        let vuv = null;
+        if (texLayer >= TEX_BASE) {
+          layer = texLayer; vc = texCol; vuv = [uv[i * 2], uv[i * 2 + 1]];
+        } else if (!skin && uv && hasTex) {
           const s = sampleHit(mat, uv[i * 2], uv[i * 2 + 1]);
           if (s) vc = packColor(Math.round(s[0] * fr), Math.round(s[1] * fg), Math.round(s[2] * fb), Math.round(s[3] * (fa / 255)));
         }
@@ -307,7 +382,7 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
             Math.round(((vc >> 16) & 255) * tintMul[2]),
             (vc >>> 24) & 255);
         }
-        verts.push({ p, n: [nx, ny, nz], col: vc, layer: skinLayer });
+        verts.push({ p, n: [nx, ny, nz], col: vc, layer, uv: vuv });
         if (p[0] < minX) minX = p[0];
         if (p[1] < minY) minY = p[1];
         if (p[2] < minZ) minZ = p[2];
@@ -362,12 +437,13 @@ function decimate(model, cell) {
   for (let i = 0; i < nv; ++i) {
     const v = model.verts[i];
     const kx = Math.round(v.p[0] / cell), ky = Math.round(v.p[1] / cell), kz = Math.round(v.p[2] / cell);
-    const key = kx + ',' + ky + ',' + kz + ',' + v.layer;
+    let key = kx + ',' + ky + ',' + kz + ',' + v.layer;
+    if (v.uv) key += ',' + Math.round(v.uv[0] * 96) + ',' + Math.round(v.uv[1] * 96);
     let c = map.get(key);
     if (c === undefined) {
       c = acc.length;
       map.set(key, c);
-      acc.push({ p: [kx * cell, ky * cell, kz * cell], n: [0, 0, 0], rgb: [0, 0, 0, 0], count: 0, layer: v.layer });
+      acc.push({ p: [kx * cell, ky * cell, kz * cell], n: [0, 0, 0], rgb: [0, 0, 0, 0], uv: [0, 0], hasUv: !!v.uv, count: 0, layer: v.layer });
     }
     const a = acc[c];
     a.n[0] += v.n[0]; a.n[1] += v.n[1]; a.n[2] += v.n[2];
@@ -375,6 +451,7 @@ function decimate(model, cell) {
     a.rgb[1] += (v.col >> 8) & 255;
     a.rgb[2] += (v.col >> 16) & 255;
     a.rgb[3] += (v.col >>> 24) & 255;
+    if (v.uv) { a.uv[0] += v.uv[0]; a.uv[1] += v.uv[1]; }
     a.count += 1;
     remap[i] = c;
   }
@@ -384,7 +461,8 @@ function decimate(model, cell) {
     const r = Math.round(a.rgb[0] * inv), g = Math.round(a.rgb[1] * inv);
     const b = Math.round(a.rgb[2] * inv), al = Math.round(a.rgb[3] * inv);
     return { p: a.p, n: [a.n[0] / l, a.n[1] / l, a.n[2] / l],
-             col: (r | (g << 8) | (b << 16) | (al << 24)) >>> 0, layer: a.layer };
+             col: (r | (g << 8) | (b << 16) | (al << 24)) >>> 0, layer: a.layer,
+             uv: a.hasUv ? [a.uv[0] * inv, a.uv[1] * inv] : null };
   });
   const idx = [];
   for (let i = 0; i < model.idx.length; i += 3) {
@@ -428,7 +506,7 @@ function writeMwb(models, file) {
       buf.writeFloatLE(v.p[0], p); buf.writeFloatLE(v.p[1], p + 4); buf.writeFloatLE(v.p[2], p + 8);
       buf.writeFloatLE(v.n[0], p + 12); buf.writeFloatLE(v.n[1], p + 16); buf.writeFloatLE(v.n[2], p + 20);
       const layer = v.layer === undefined ? -1 : v.layer;
-      const uv = layer >= 0 ? skinUv(layer, v.p, v.n) : [0, 0];
+      const uv = v.uv ? v.uv : (layer >= 0 && layer < TEX_BASE ? skinUv(layer, v.p, v.n) : [0, 0]);
       buf.writeFloatLE(uv[0], p + 24); buf.writeFloatLE(uv[1], p + 28);
       buf.writeFloatLE(layer, p + 32);
       buf.writeUInt32LE(v.col >>> 0, p + 36);
@@ -461,7 +539,7 @@ for (const entry of cfg.models) {
   const pick = e.pick ? (Array.isArray(e.pick) ? e.pick : [e.pick]) : null;
   const skip = e.skip ? e.skip.map((r) => new RegExp(r)) : null;
   const raw = convertModel(file, e.brighten || 1, pick, !!e.skin, e.skin_map || null, skip,
-    e.skin_tint || 1, e.tint || null);
+    e.skin_tint || 1, e.tint || null, !!e.tex);
   if (e.scale && e.scale !== 1) {
     for (const v of raw.verts) {
       v.p[0] *= e.scale; v.p[1] *= e.scale; v.p[2] *= e.scale;
@@ -484,12 +562,27 @@ for (const entry of cfg.models) {
 }
 models.sort((a, b) => a.name.localeCompare(b.name));
 const bytes = writeMwb(models, path.join(outDir, 'city.mwb'));
+// citytex.bin: MTX1 + count + (len + JPEG) por camada de textura (15+)
+{
+  let total = 8;
+  for (const t of texLayers) total += 4 + t.length;
+  const tb = Buffer.alloc(total);
+  tb.write('MTX1', 0, 'ascii');
+  tb.writeUInt32LE(texLayers.length, 4);
+  let o = 8;
+  for (const t of texLayers) {
+    tb.writeUInt32LE(t.length, o); o += 4;
+    Buffer.from(t).copy(tb, o); o += t.length;
+  }
+  fs.writeFileSync(path.join(outDir, 'citytex.bin'), tb);
+}
 fs.writeFileSync(
   path.join(outDir, 'manifest.json'),
   JSON.stringify({
     count: models.length,
     tris: totalTris,
     bytes,
+    texCount: texLayers.length,
     models: models.map((m) => ({
       name: m.name,
       verts: m.verts.length,
@@ -499,3 +592,4 @@ fs.writeFileSync(
   }, null, 1)
 );
 console.log(`\n${models.length} modelos, ${totalTris} tris, ${(bytes / 1024).toFixed(1)} KB -> web/assets/city.mwb`);
+console.log(`${texLayers.length} texturas reais -> web/assets/citytex.bin`);

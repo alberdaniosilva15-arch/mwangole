@@ -58,6 +58,11 @@ aparece no HUD. No minimapa há ícones com legenda para casas à venda, mercear
 restaurante, garagem, loja de armas e contactos de missão; chega-te ao poste com a
 placa luminosa e prime `E`.
 
+**Arte**: os edifícios e veículos usam modelos 3D reais. Os GLB fornecidos
+(`assets-src/meus-modelos/`) mantêm as **texturas originais**: o conversor bakeia-as
+em camadas do atlas (`web/assets/citytex.bin`) e o shader amostra-as com os UVs
+originais, por isso as fachadas, varandas e montras aparecem como nos modelos.
+
 ## Compilar
 
 Requisitos: [Emscripten SDK](https://emscripten.org/) em `D:\emsdk` (ou defina `EMSDK`).

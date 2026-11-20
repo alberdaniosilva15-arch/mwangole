@@ -31,6 +31,7 @@ const evalJs = async (expr) => {
 
 await send('Page.enable');
 await send('Runtime.enable');
+await send('Page.bringToFront');
 await send('Emulation.setDeviceMetricsOverride', { width: Number(process.env.RESW || 1280), height: Number(process.env.RESH || 720), deviceScaleFactor: 1, mobile: false });
 const t0 = Date.now();
 while (Date.now() - t0 < 40000) {

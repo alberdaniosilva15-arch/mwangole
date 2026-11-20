@@ -23,7 +23,7 @@
 | Fase | Estado | Falta |
 |---|---|---|
 | **M0–M2** motor, condução, trânsito, peões, polícia, áudio | ✅ feito | — |
-| **M3** arte real | ✅ feito | — (extra já incluído: marcos Sketchfab `condominio_apartamentos`/`predio_sanzio`, massing em tiers, montras, contact shadows) |
+| **M3** arte real | ✅ feito | — (extra: marcos Sketchfab, massing em tiers, montras, contact shadows; **texturas reais** dos GLB do utilizador bakeadas em camadas 15+ do atlas 2D array, com UVs originais e sRGB→linear no shader — `tools/glb2mw.mjs` + `citytex.bin`) |
 | **M4** cidade com lógica | ✅ feito | Distritos com arquitectura própria (Baixa torres + placa "BAIXA"; Cidade Alta/Kilamba a leste com torres, jardins e praças; Musseque a oeste e norte com casas coloridas de 1–3 pisos, quintais de terra e bancas de rua; Ilha do Cabo com areal, quiosques e ponte desde a Marginal) · 7 tipos de POI (3 casas à venda, garagem, mercearia, restaurante, loja de armas, 3 contactos de missão, praça de candongueiros) com placas emissivas no mundo, ícones no minimapa e legenda · portas interactivas com E (prioridade porta > carro, só a pé) · semáforos de 12 s em 16 cruzamentos, com paragem do trânsito no vermelho · HUD mostra o distrito actual |
 | **M5** economia e propriedade | 🟡 20% | Já existe **fonte** de dinheiro (estafeta). Falta o **gasto**: casas 25 000 / 45 000 / 90 000 Kz com safehouse e ponto de spawn, garagem, pistola/munições/kit de saúde à venda, menu de compra "À VENDA", **save em localStorage** com versão, casa comprada mostra "TUA" no mapa |
 | **M6** armas e combate | ❌ 0% | Pistola na mão, modo de mira, raycast + tracer/flash/som, dano e quedas, polícia a responder a tiro (3★+), hospital/respawn com −10 % de dinheiro, munição no HUD, teclas 1/2, botões móveis |
@@ -33,7 +33,7 @@
 
 **Ordem de maior impacto recomendada:** M5 (economia/save) → M8 (missões com briefing) → M6 (combate) → M7 → M9.
 
-**Aviso de performance:** o critério de aceitação exige ≥55 fps p50 a 1280×720 no HD 4000; no Chrome headless mediram-se **46–50 fps** depois de M4 (M4 chegou a 35 fps com Cidade Alta densa em chunks distantes; resolvido baixando o detalhe LOD1 e limitando a Cidade Alta a leste de x = 700). Antes de M6/M9 convém correr `node tools/bench.mjs` no portátil real para decidir se o LOD (M9) tem de subir de prioridade.
+**Aviso de performance:** o critério de aceitação exige ≥55 fps p50 a 1280×720 no HD 4000; no Chrome headless (GPU ANGLE) mediram-se **~35–45 fps** depois das texturas reais (eram 46–50 com fachadas planas; o detalhe de textura custa ~20%). Cena: 5,12 M tris. Payload total **≈2,3 MB gz** (city.mwb 1,97 + citytex.bin 0,31 + wasm/js 0,09), dentro do limite de 3 MB. Antes de M6/M9 convém correr `node tools/bench.mjs` no portátil real para decidir se o LOD (M9) tem de subir de prioridade.
 
 ---
 

@@ -7,7 +7,47 @@
 
 #include "gfx.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_JPEG
+#define STBI_ONLY_PNG
+#define STBI_NO_STDIO
+#include "stb_image.h"
+
 static_assert(sizeof(Vertex) == 40, "layout do Vertex tem de casar com o MWB");
+
+// carrega citytex.bin (MTX1): camadas de textura reais 256x256 RGBA para o atlas
+inline std::vector<std::vector<uint8_t>> assets_load_textures(const char* path, int S = 256) {
+  std::vector<std::vector<uint8_t>> out;
+  std::FILE* f = std::fopen(path, "rb");
+  if (!f) return out;
+  std::fseek(f, 0, SEEK_END);
+  long size = std::ftell(f);
+  std::fseek(f, 0, SEEK_SET);
+  if (size < 8) { std::fclose(f); return out; }
+  std::vector<uint8_t> data((size_t)size);
+  size_t got = std::fread(data.data(), 1, data.size(), f);
+  std::fclose(f);
+  if (got != data.size() || std::memcmp(data.data(), "MTX1", 4) != 0) return out;
+  uint32_t count = 0;
+  std::memcpy(&count, data.data() + 4, 4);
+  size_t o = 8;
+  for (uint32_t i = 0; i < count; ++i) {
+    if (o + 4 > data.size()) break;
+    uint32_t len = 0;
+    std::memcpy(&len, data.data() + o, 4);
+    o += 4;
+    if (o + len > data.size()) break;
+    int w = 0, h = 0, comp = 0;
+    stbi_uc* px = stbi_load_from_memory(data.data() + o, (int)len, &w, &h, &comp, 4);
+    o += len;
+    if (px && w == S && h == S) {
+      out.emplace_back(px, px + (size_t)S * S * 4);
+    }
+    if (px) stbi_image_free(px);
+  }
+  std::fprintf(stderr, "[assets] %u texturas reais carregadas de %s\n", (unsigned)out.size(), path);
+  return out;
+}
 
 struct AssetModel {
   std::string name;

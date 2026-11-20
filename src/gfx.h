@@ -252,7 +252,7 @@ inline void set_px(std::vector<uint8_t>& data, int S, int x, int y, int r, int g
   data[o + 3] = (uint8_t)clampf((float)a, 0, 255);
 }
 
-inline GLuint make_atlas(int S = 256) {
+inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& extra = {}) {
   std::vector<uint8_t> layer((size_t)S * S * 4);
   std::vector<std::vector<uint8_t>> layers;
 
@@ -455,6 +455,11 @@ inline GLuint make_atlas(int S = 256) {
   std::fill(layer.begin(), layer.end(), 255);
   push();
 
+  // 15+ texturas reais dos modelos do utilizador (RGBA S×S)
+  for (const auto& e : extra) {
+    if ((int)e.size() == S * S * 4) layers.push_back(e);
+  }
+
   GLuint tex = 0;
   glGenTextures(1, &tex);
   glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
@@ -552,14 +557,16 @@ uniform float uSpec;
 out vec4 outColor;
 
 void main() {
-  if (vLayer > 13.5) {
+  if (vLayer > 13.5 && vLayer < 14.5) {
     vec3 e = vCol.rgb;
     e = (e * (2.51 * e + 0.03)) / (e * (2.43 * e + 0.59) + 0.14);
     outColor = vec4(e, 1.0);
     return;
   }
   vec4 tex = vLayer < 0.0 ? vec4(1.0) : texture(uAtlas, vec3(vUv, vLayer));
-  vec3 albedo = tex.rgb * vCol.rgb;
+  vec3 tcol = tex.rgb;
+  if (vLayer > 14.5) tcol = pow(tcol, vec3(2.2));  // texturas reais: sRGB -> linear
+  vec3 albedo = tcol * vCol.rgb;
   vec3 n = normalize(vN);
   float ndl = max(dot(n, uSunDir), 0.0);
   vec3 amb = mix(uAmbGround, uAmbSky, n.y * 0.5 + 0.5);

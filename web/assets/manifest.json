@@ -1,7 +1,8 @@
 {
  "count": 71,
- "tris": 121324,
- "bytes": 4028065,
+ "tris": 168032,
+ "bytes": 7834601,
+ "texCount": 25,
  "models": [
   {
    "name": "beira_rio/barco_pesca",
@@ -165,8 +166,8 @@
   },
   {
    "name": "meus/complexo_baia",
-   "verts": 1840,
-   "tris": 4702,
+   "verts": 22233,
+   "tris": 29199,
    "size": [
     37.97677993774414,
     8.532119989395142,
@@ -175,8 +176,8 @@
   },
   {
    "name": "meus/condominio_apartamentos",
-   "verts": 9643,
-   "tris": 31972,
+   "verts": 41992,
+   "tris": 50030,
    "size": [
     49.09835133534784,
     44.740865426094864,
@@ -185,8 +186,8 @@
   },
   {
    "name": "meus/loja_downtown",
-   "verts": 915,
-   "tris": 1134,
+   "verts": 1934,
+   "tris": 1300,
    "size": [
     31.66801663826975,
     17.73685959625244,
@@ -195,8 +196,8 @@
   },
   {
    "name": "meus/predio_artdeco",
-   "verts": 1567,
-   "tris": 2099,
+   "verts": 3591,
+   "tris": 2361,
    "size": [
     18.022001266479492,
     45.07227520751963,
@@ -205,8 +206,8 @@
   },
   {
    "name": "meus/predio_brownstone",
-   "verts": 1684,
-   "tris": 2098,
+   "verts": 3935,
+   "tris": 2719,
    "size": [
     52.9763343055497,
     24.714599102735516,
@@ -215,8 +216,8 @@
   },
   {
    "name": "meus/predio_brownstone_b",
-   "verts": 1971,
-   "tris": 2458,
+   "verts": 4724,
+   "tris": 2971,
    "size": [
     14.724171161651611,
     26.247257709503184,
@@ -225,7 +226,7 @@
   },
   {
    "name": "meus/predio_brutalista",
-   "verts": 2328,
+   "verts": 3042,
    "tris": 3216,
    "size": [
     39.224915135278025,
@@ -235,8 +236,8 @@
   },
   {
    "name": "meus/predio_classico",
-   "verts": 1859,
-   "tris": 2623,
+   "verts": 3721,
+   "tris": 2669,
    "size": [
     38.80626106262207,
     44.86330636307468,
@@ -245,8 +246,8 @@
   },
   {
    "name": "meus/predio_escritorio",
-   "verts": 547,
-   "tris": 626,
+   "verts": 943,
+   "tris": 679,
    "size": [
     26.175101385417776,
     37.071598052978516,
@@ -255,8 +256,8 @@
   },
   {
    "name": "meus/predio_escritorio_b",
-   "verts": 983,
-   "tris": 1050,
+   "verts": 1644,
+   "tris": 1123,
    "size": [
     26.175100768253216,
     64.4370861053467,
@@ -265,8 +266,8 @@
   },
   {
    "name": "meus/predio_escritorio_c",
-   "verts": 355,
-   "tris": 595,
+   "verts": 852,
+   "tris": 697,
    "size": [
     10.000001907348633,
     21.243058815598488,
@@ -275,8 +276,8 @@
   },
   {
    "name": "meus/predio_escritorio_d",
-   "verts": 303,
-   "tris": 386,
+   "verts": 595,
+   "tris": 415,
    "size": [
     13.305058479309082,
     18.393954796127215,
@@ -285,8 +286,8 @@
   },
   {
    "name": "meus/predio_flatiron",
-   "verts": 6946,
-   "tris": 12219,
+   "verts": 15785,
+   "tris": 14337,
    "size": [
     56.532280138028824,
     85.88585177612322,
@@ -295,8 +296,8 @@
   },
   {
    "name": "meus/predio_moderno",
-   "verts": 1337,
-   "tris": 2056,
+   "verts": 2517,
+   "tris": 2072,
    "size": [
     35.704803466796875,
     102.26448363065721,
@@ -305,7 +306,7 @@
   },
   {
    "name": "meus/predio_moderno_b",
-   "verts": 989,
+   "verts": 1845,
    "tris": 1368,
    "size": [
     35.704803466796875,
@@ -315,8 +316,8 @@
   },
   {
    "name": "meus/predio_publico",
-   "verts": 534,
-   "tris": 794,
+   "verts": 1072,
+   "tris": 806,
    "size": [
     35.18437576293945,
     25.7773084066912,
@@ -325,8 +326,8 @@
   },
   {
    "name": "meus/predio_residencial",
-   "verts": 908,
-   "tris": 1282,
+   "verts": 1862,
+   "tris": 1360,
    "size": [
     31.61765730168412,
     29.87641882896424,
@@ -335,7 +336,7 @@
   },
   {
    "name": "meus/predio_residencial_b",
-   "verts": 1120,
+   "verts": 1860,
    "tris": 1682,
    "size": [
     36.945966720581055,
@@ -345,7 +346,7 @@
   },
   {
    "name": "meus/predio_residencial_c",
-   "verts": 1128,
+   "verts": 2124,
    "tris": 1698,
    "size": [
     36.945966720581055,
@@ -355,7 +356,7 @@
   },
   {
    "name": "meus/predio_sanzio",
-   "verts": 4574,
+   "verts": 4583,
    "tris": 14827,
    "size": [
     15.910617441037903,
@@ -365,8 +366,8 @@
   },
   {
    "name": "meus/predio_vidro",
-   "verts": 1185,
-   "tris": 1830,
+   "verts": 3013,
+   "tris": 1894,
    "size": [
     38.715890884399414,
     80.73529541492462,
