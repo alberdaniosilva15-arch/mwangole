@@ -3,7 +3,7 @@
 Actualizado: 20/11/2026 · branch `main`
 
 Documento de acompanhamento. O plano completo está em `.opencode/plan/Mwangole-PLANO-UNICO.md`
-e o histórico técnico nos commits `F0` → `F3b`.
+e o histórico técnico nos commits `F0` → `F3c`.
 
 ---
 
