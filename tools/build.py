@@ -27,6 +27,7 @@ FLAGS = [
     "-sINITIAL_MEMORY=134217728",
     "-sSTACK_SIZE=1048576",
     "-sASSERTIONS=0",
+    "-sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString,HEAPU8",
     "-I",
     os.path.join(EMSDK, "upstream", "emscripten", "third_party"),
     "--preload-file",

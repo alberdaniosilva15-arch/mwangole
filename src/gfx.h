@@ -94,10 +94,26 @@ inline Mesh make_mesh(const std::vector<Vertex>& verts, const std::vector<uint32
   return m;
 }
 
+// Estatisticas do ultimo frame (mw_debug_stats). Baratas: dois incrementos por draw.
+inline int& stat_draw_calls() {
+  static int v = 0;
+  return v;
+}
+inline double& stat_draw_tris() {
+  static double v = 0.0;
+  return v;
+}
+inline void stat_frame_reset() {
+  stat_draw_calls() = 0;
+  stat_draw_tris() = 0.0;
+}
+
 inline void draw_mesh(const Mesh& m) {
   if (!m.vao || !m.count) return;
   glBindVertexArray(m.vao);
   glDrawElements(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr);
+  stat_draw_calls() += 1;
+  stat_draw_tris() += (double)m.count / 3.0;
 }
 
 inline GLuint make_instance_buffer() {

@@ -458,6 +458,70 @@ EMSCRIPTEN_KEEPALIVE void mw_look(float dx, float dy) {
 
 EMSCRIPTEN_KEEPALIVE void mw_debug_top(int on) { g_debug_top = on; }
 
+// Devolve "nome|escala|camada|tris|centroX|centroZ|altura|meiaLarguraX|meiaLarguraZ"
+// do lote que contem o ponto. Camada -2 = edificio procedural; -1 = cor de vertice.
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot(float x, float z) {
+  static std::string out;
+  const std::vector<LotRecord>& lots = lot_records();
+  for (const auto& r : lots) {
+    if (x < r.cx - r.hx || x > r.cx + r.hx) continue;
+    if (z < r.cz - r.hz || z > r.cz + r.hz) continue;
+    char buf[320];
+    std::snprintf(buf, sizeof(buf), "%s|%.3f|%d|%d|%.1f|%.1f|%.1f|%.1f|%.1f", r.name.c_str(),
+                  r.scale, r.layer, r.tris, r.cx, r.cz, r.height, r.hx, r.hz);
+    out.assign(buf);
+    return out.c_str();
+  }
+  out.assign("none|0|0|0|0|0|0|0|0");
+  return out.c_str();
+}
+
+EMSCRIPTEN_KEEPALIVE int mw_debug_lot_count() { return (int)lot_records().size(); }
+
+// Uma linha por registo: indice, nome, centro, meia-largura, escala, camada, tris.
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot_dump(int i) {
+  static std::string out;
+  const std::vector<LotRecord>& lots = lot_records();
+  if (i < 0 || i >= (int)lots.size()) { out.assign("none|0|0|0|0|0|0|0|0"); return out.c_str(); }
+  const LotRecord& r = lots[i];
+  char buf[320];
+  std::snprintf(buf, sizeof(buf), "%s|%.3f|%d|%d|%.1f|%.1f|%.1f|%.1f|%.1f", r.name.c_str(),
+                r.scale, r.layer, r.tris, r.cx, r.cz, r.height, r.hx, r.hz);
+  out.assign(buf);
+  return out.c_str();
+}
+
+// Lote mais proximo do ponto (mesmo que o ponto caia na rua). Util para achar o muro.
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot_nearest(float x, float z) {
+  static std::string out;
+  const std::vector<LotRecord>& lots = lot_records();
+  int best = -1;
+  float best_d = 1e30f;
+  for (size_t i = 0; i < lots.size(); ++i) {
+    const LotRecord& r = lots[i];
+    float dx = std::max(0.0f, std::max(r.cx - r.hx - x, x - (r.cx + r.hx)));
+    float dz = std::max(0.0f, std::max(r.cz - r.hz - z, z - (r.cz + r.hz)));
+    float d = dx * dx + dz * dz;
+    if (d < best_d) { best_d = d; best = (int)i; }
+  }
+  if (best < 0) { out.assign("none|0|0|0|0|0|0|0|0"); return out.c_str(); }
+  const LotRecord& r = lots[(size_t)best];
+  char buf[320];
+  std::snprintf(buf, sizeof(buf), "%s|%.3f|%d|%d|%.1f|%.1f|%.1f|%.1f|%.1f", r.name.c_str(),
+                r.scale, r.layer, r.tris, r.cx, r.cz, r.height, r.hx, r.hz);
+  out.assign(buf);
+  return out.c_str();
+}
+
+// Estatisticas do ultimo frame desenhado: "draw_calls|triangulos".
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_stats() {
+  static std::string out;
+  char buf[96];
+  std::snprintf(buf, sizeof(buf), "%d|%.0f", stat_draw_calls(), stat_draw_tris());
+  out.assign(buf);
+  return out.c_str();
+}
+
 EMSCRIPTEN_KEEPALIVE void mw_debug_time(float tod) {
   g_tod = clampf(tod, 0.0f, 0.999f);
   g_want_time_jump = 0;
@@ -973,6 +1037,7 @@ static void frame() {
   if (dt > 0.08f) dt = 0.08f;
   if (dt < 0.0f) dt = 0.0f;
   g_time += dt;
+  stat_frame_reset();
   update_time_of_day(dt);
 
   // input

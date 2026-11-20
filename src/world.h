@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "gfx.h"
@@ -369,6 +370,8 @@ inline void draw_instanced(const Mesh& m, GLsizei instances) {
   if (!m.vao || !m.count || instances <= 0) return;
   glBindVertexArray(m.vao);
   glDrawElementsInstanced(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr, instances);
+  stat_draw_calls() += 1;
+  stat_draw_tris() += (double)m.count / 3.0 * (double)instances;
 }
 
 // ------------------------------------------------------------- small props
@@ -506,6 +509,72 @@ struct City {
   std::vector<AABB> colliders;
   GLuint emptyVao = 0;
 };
+
+// ---------------------------------------- debug: registo de lotes (mw_debug_lot)
+struct LotRecord {
+  std::string name;
+  float cx = 0.0f, cz = 0.0f;   // centro em XZ
+  float hx = 0.0f, hz = 0.0f;   // meia largura em XZ
+  float scale = 1.0f;
+  float height = 0.0f;
+  int layer = -1;               // camada dominante do modelo (-2 = procedural)
+  int tris = 0;
+};
+
+inline std::vector<LotRecord>& lot_records() {
+  static std::vector<LotRecord> v;
+  return v;
+}
+
+inline void lot_records_clear() { lot_records().clear(); }
+
+inline int model_dominant_layer(const AssetModel& m) {
+  int lv[16], cnt[16];
+  int n = 0;
+  auto add = [&](int l) {
+    int k = -1;
+    for (int i = 0; i < n; ++i) {
+      if (lv[i] == l) { k = i; break; }
+    }
+    if (k < 0) {
+      if (n >= 16) return;
+      lv[n] = l;
+      cnt[n] = 0;
+      k = n++;
+    }
+    cnt[k] += 1;
+  };
+  // Para diagnostico de fachada conta so as faces laterais (|ny| <= 0.7):
+  // telhados e lajes interiores dominam o vertice count e escondem o material da parede.
+  int side = 0;
+  for (const auto& vert : m.verts) {
+    if (std::fabs(vert.ny) > 0.7f) continue;
+    add((int)std::lround(vert.layer));
+    side += 1;
+  }
+  if (side == 0) {
+    for (const auto& vert : m.verts) add((int)std::lround(vert.layer));
+  }
+  int best = -1, best_n = -1;
+  for (int i = 0; i < n; ++i) {
+    if (cnt[i] > best_n) { best_n = cnt[i]; best = lv[i]; }
+  }
+  return best;
+}
+
+inline void record_lot(const char* name, const AABB& a, float scale, int layer, int tris) {
+  LotRecord r;
+  r.name = name;
+  r.cx = (a.mn.x + a.mx.x) * 0.5f;
+  r.cz = (a.mn.z + a.mx.z) * 0.5f;
+  r.hx = (a.mx.x - a.mn.x) * 0.5f;
+  r.hz = (a.mx.z - a.mn.z) * 0.5f;
+  r.scale = scale;
+  r.height = a.mx.y - a.mn.y;
+  r.layer = layer;
+  r.tris = tris;
+  lot_records().push_back(r);
+}
 
 inline void upload_instances(Chunk& c) {
   if (!c.treeData.empty()) {
@@ -747,6 +816,10 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
   const AssetModel* m = asset_get(name);
   if (!m || m->bounds.mx.x <= m->bounds.mn.x) {
     build_building(c, bld, x0, z0, x1, z1, s, baseY, dist, c.lod1);
+    AABB pa;
+    pa.mn = {x0, baseY, z0};
+    pa.mx = {x1, baseY + 1.0f, z1};
+    record_lot("procedural", pa, 1.0f, -2, 0);
     return;
   }
   float fw = m->bounds.mx.x - m->bounds.mn.x;
@@ -766,6 +839,8 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
   }
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
+  // Dados do lote para mw_debug_lot(x,z): nome, escala, camada dominante, tris.
+  record_lot(name, a, sc, model_dominant_layer(*m), m->tris);
   if (dist == D_BAIXA) {
     bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f, L_SIDEWALK,
             tint3(0.68f, 0.66f, 0.63f), 4.0f);
@@ -796,6 +871,7 @@ inline bool place_landmark(Chunk& c, Builder& bld, const char* name, float bx, f
   append_model(bld.v, *m, cx, cz, yaw, sc, baseY);
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
+  record_lot(name, a, sc, model_dominant_layer(*m), m->tris);
   bld.top(a.mn.x - 1.2f, a.mn.z - 1.2f, a.mx.x + 1.2f, a.mx.z + 1.2f, 0.172f, L_SIDEWALK,
           tint3(0.66f, 0.64f, 0.61f), 4.0f);
   a.mn.x -= 0.25f; a.mn.z -= 0.25f; a.mx.x += 0.25f; a.mx.z += 0.25f;
@@ -1148,6 +1224,7 @@ inline void build_features(City& city, Mesh& treeMesh, Mesh& lampMesh) {
 
 inline void build_city(City& city, Mesh& treeMesh, Mesh& lampMesh) {
   build_signals();
+  lot_records_clear();
   city.chunks.resize(12);
   int idx = 0;
   for (int cz = -1; cz <= 1; ++cz) {
