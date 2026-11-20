@@ -214,6 +214,78 @@
    "cell": 0.8,
    "tex": true,
    "brighten": 1.1
+  },
+  {
+   "name": "meus/oc_sedan",
+   "file": "novos/oc_sedan_01.glb",
+   "cell": 0.05
+  },
+  {
+   "name": "meus/oc_hatch",
+   "file": "novos/oc_hatch_01.glb",
+   "cell": 0.04
+  },
+  {
+   "name": "meus/oc_exotic",
+   "file": "novos/oc_exotic_01.glb",
+   "cell": 0.04
+  },
+  {
+   "name": "meus/oc_scooter",
+   "file": "novos/oc_scooter_01.glb",
+   "cell": 0.03
+  },
+  {
+   "name": "meus/oc_police",
+   "file": "novos/oc_police_sedan_01.glb",
+   "cell": 0.05
+  },
+  {
+   "name": "meus/oc_heli",
+   "file": "novos/oc_police_heli_01.glb",
+   "cell": 0.05
+  },
+  {
+   "name": "meus/oc_apartments",
+   "file": "novos/oc_apartments_01.glb",
+   "cell": 0.08,
+   "tex": true,
+   "brighten": 1.05
+  },
+  {
+   "name": "meus/oc_banco",
+   "file": "novos/oc_bank_harbour_mutual_01.glb",
+   "cell": 0.08,
+   "tex": true,
+   "brighten": 1.05
+  },
+  {
+   "name": "meus/oc_hotel",
+   "file": "novos/oc_hotel_flamingo_01.glb",
+   "cell": 0.1,
+   "tex": true,
+   "brighten": 1.05
+  },
+  {
+   "name": "meus/oc_garagem",
+   "file": "novos/oc_mendez_garage_01.glb",
+   "cell": 0.08,
+   "tex": true,
+   "brighten": 1.05
+  },
+  {
+   "name": "meus/oc_lojas",
+   "file": "novos/oc_shop_row_01.glb",
+   "cell": 0.1,
+   "tex": true,
+   "brighten": 1.05
+  },
+  {
+   "name": "meus/oc_showroom",
+   "file": "novos/oc_showroom_01.glb",
+   "cell": 0.08,
+   "tex": true,
+   "brighten": 1.05
   }
  ],
  "user_dir": "assets-src/meus-modelos"

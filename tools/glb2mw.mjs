@@ -4,8 +4,64 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
+
+const require = createRequire(import.meta.url);
+
+// ---------------------------------------------------------------- Draco
+// Os GLB do projecto antigo vem comprimidos com KHR_draco_mesh_compression.
+// Decodificamos aqui para o conversor continuar a ler arrays simples.
+let dracoModule = null;
+let dracoDecoder = null;
+async function initDraco() {
+  if (dracoDecoder) return;
+  const draco3d = require('draco3d');
+  dracoModule = await draco3d.createDecoderModule({});
+  dracoDecoder = new dracoModule.Decoder();
+}
+
+function decodeDraco(gltf, bin, prim) {
+  const ext = prim.extensions.KHR_draco_mesh_compression;
+  const bv = gltf.bufferViews[ext.bufferView];
+  const off = bv.byteOffset || 0;
+  const data = new Uint8Array(bin.buffer, bin.byteOffset + off, bv.byteLength);
+  const buf = new dracoModule.DecoderBuffer();
+  buf.Init(data, data.length);
+  const mesh = new dracoModule.Mesh();
+  const status = dracoDecoder.DecodeBufferToMesh(buf, mesh);
+  if (!status.ok() || mesh.ptr === 0) throw new Error('draco: falha ao descodificar');
+  const out = { pos: null, nrm: null, uv: null, ind: null };
+  for (const [sem, uniqueId] of Object.entries(ext.attributes || {})) {
+    const att = dracoDecoder.GetAttributeByUniqueId(mesh, uniqueId);
+    const n = mesh.num_points();
+    const comps = att.num_components();
+    const arr = new dracoModule.DracoFloat32Array();
+    dracoDecoder.GetAttributeFloatForAllPoints(mesh, att, arr);
+    const vals = new Float32Array(n * comps);
+    for (let i = 0; i < vals.length; ++i) vals[i] = arr.GetValue(i);
+    dracoModule.destroy(arr);
+    if (sem === 'POSITION') out.pos = vals;
+    else if (sem === 'NORMAL') out.nrm = vals;
+    else if (sem === 'TEXCOORD_0') out.uv = vals;
+  }
+  const faces = mesh.num_faces();
+  const idx = new Uint32Array(faces * 3);
+  // GetTrianglesUInt32Array desta versao devolve zeros; GetFaceFromMesh e fiável.
+  const face = new dracoModule.DracoInt32Array();
+  for (let i = 0; i < faces; ++i) {
+    dracoDecoder.GetFaceFromMesh(mesh, i, face);
+    idx[i * 3] = face.GetValue(0);
+    idx[i * 3 + 1] = face.GetValue(1);
+    idx[i * 3 + 2] = face.GetValue(2);
+  }
+  dracoModule.destroy(face);
+  dracoModule.destroy(mesh);
+  dracoModule.destroy(buf);
+  out.ind = idx;
+  return out;
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'models.json'), 'utf8'));
@@ -379,16 +435,26 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
     const nm = normalMatrix(world);
     for (const prim of mesh.primitives) {
       if ((prim.mode === undefined ? 4 : prim.mode) !== 4) continue;
-      const pos = readAccessor(gltf, bin, prim.attributes.POSITION);
-      const nrm = prim.attributes.NORMAL !== undefined ? readAccessor(gltf, bin, prim.attributes.NORMAL) : null;
-      const ind = prim.indices !== undefined ? readAccessor(gltf, bin, prim.indices) : null;
+      let pos, nrm, ind, uvRaw = null;
+      if (prim.extensions && prim.extensions.KHR_draco_mesh_compression) {
+        const d = decodeDraco(gltf, bin, prim);
+        pos = d.pos;
+        nrm = d.nrm;
+        ind = d.ind;
+        uvRaw = d.uv;
+      } else {
+        pos = readAccessor(gltf, bin, prim.attributes.POSITION);
+        nrm = prim.attributes.NORMAL !== undefined ? readAccessor(gltf, bin, prim.attributes.NORMAL) : null;
+        ind = prim.indices !== undefined ? readAccessor(gltf, bin, prim.indices) : null;
+        uvRaw = prim.attributes.TEXCOORD_0 !== undefined ? readAccessorFloat(gltf, bin, prim.attributes.TEXCOORD_0) : null;
+      }
       const cnt = pos.length / 3;
       const base = verts.length;
       const matIdx = prim.material !== undefined ? prim.material : 0;
       const mat = (gltf.materials && gltf.materials[matIdx]) || {};
       const skinLayer = skin ? SKIN_LAYER[skinLayerOf(mat.name, skinMap)] : -1;
       const col = skin ? tintOf(matIdx) : colorOf(matIdx);
-      const uv = prim.attributes.TEXCOORD_0 !== undefined ? readAccessorFloat(gltf, bin, prim.attributes.TEXCOORD_0) : null;
+      const uv = uvRaw;
       const hasTex = !!(mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorTexture);
       let texLayer = -1;
       if (texMode && uv) {
@@ -589,6 +655,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const models = [];
 let totalTris = 0;
+await initDraco();
 for (const entry of cfg.models) {
   const e = typeof entry === 'string' ? { name: entry } : entry;
   const name = e.name;

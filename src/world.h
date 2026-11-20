@@ -332,8 +332,9 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
       static const char* towers[] = {
         "meus/predio_moderno", "meus/predio_vidro", "meus/predio_escritorio_b",
         "meus/predio_moderno_b", "meus/predio_flatiron", "meus/predio_classico",
+        "meus/oc_hotel", "meus/oc_apartments",
       };
-      return towers[(int)(frand(s) * 6) % 6];
+      return towers[(int)(frand(s) * 8) % 8];
     }
     if (r < 0.86f) {
       static const char* mid[] = {
@@ -341,8 +342,9 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
         "meus/predio_brownstone", "meus/predio_brownstone_b", "meus/predio_classico",
         "meus/predio_artdeco", "meus/predio_escritorio", "meus/predio_publico",
         "residencial/predio_apartamentos",
+        "meus/oc_banco", "meus/oc_showroom", "meus/oc_garagem", "meus/oc_lojas",
       };
-      return mid[(int)(frand(s) * 10) % 10];
+      return mid[(int)(frand(s) * 14) % 14];
     }
     static const char* civic[] = {"meus/predio_publico", "meus/predio_classico", "publicos/prefeitura"};
     return civic[(int)(frand(s) * 3) % 3];
@@ -352,8 +354,9 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
       "meus/predio_flatiron", "meus/predio_moderno", "meus/predio_vidro",
       "meus/predio_escritorio_b", "meus/predio_moderno_b", "meus/predio_classico",
       "meus/predio_artdeco", "meus/predio_brutalista",
+      "meus/oc_hotel", "meus/oc_apartments",
     };
-    return towers[(int)(frand(s) * 8) % 8];
+    return towers[(int)(frand(s) * 10) % 10];
   }
   if (r < 0.76f) {
     static const char* mid[] = {
@@ -363,8 +366,9 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
       "meus/predio_brownstone", "meus/predio_brownstone_b", "meus/loja_downtown",
       "meus/predio_sanzio", "meus/predio_publico", "meus/predio_escritorio_b",
       "comercial/shopping", "comercial/restaurante",
+      "meus/oc_banco", "meus/oc_showroom", "meus/oc_garagem", "meus/oc_lojas",
     };
-    return mid[(int)(frand(s) * 18) % 18];
+    return mid[(int)(frand(s) * 22) % 22];
   }
   static const char* civic[] = {
     "meus/predio_publico", "meus/predio_classico", "meus/predio_residencial",
@@ -373,7 +377,8 @@ inline const char* pick_lot_model(uint32_t& s, int dist, bool lod1) {
   return civic[(int)(frand(s) * 5) % 5];
 }
 
-inline float model_scale_max(const std::string& n) {  if (n.find("predio_alto") != std::string::npos) return 9.5f;
+inline float model_scale_max(const std::string& n) {  if (n.find("meus/oc_") != std::string::npos) return 1.15f;
+  if (n.find("predio_alto") != std::string::npos) return 9.5f;
   if (n.find("predio_apartamentos") != std::string::npos) return 9.0f;
   if (n.find("escritorio") != std::string::npos || n.find("hotel") != std::string::npos) return 9.0f;
   if (n.find("publicos/") != std::string::npos) return 6.2f;
@@ -383,6 +388,7 @@ inline float model_scale_max(const std::string& n) {  if (n.find("predio_alto") 
 
 // altura maxima em metros para modelos externos (evita casas do tamanho de torres)
 inline float model_height_cap(const std::string& n) {
+  if (n.find("meus/oc_") != std::string::npos) return 48.0f;
   if (n.find("meus/casa") != std::string::npos) return 9.5f;
   if (n.find("meus/predio_flatiron") != std::string::npos) return 92.0f;
   if (n.find("meus/predio_moderno") != std::string::npos) return 62.0f;
@@ -1232,6 +1238,24 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
           }
           if (frand(ps) < 0.30f) {
             add_prop(b, "mobiliario/hidrante", px + 2.6f, pz + BLOCK - 5.0f, 0.0f, 2.2f);
+          }
+        }
+
+        // Carros do utilizador estacionados ao lancil. Entram no builder dos props
+        // e levam colisao, para o jogador poder bater neles.
+        {
+          uint32_t cs = hash32(s ^ 0x9e3779b9u);
+          if (frand(cs) < 0.28f) {
+            const char* carModels[3] = {"meus/oc_sedan", "meus/oc_hatch", "meus/oc_exotic"};
+            const AssetModel* am = asset_get(carModels[(int)(frand(cs) * 3) % 3]);
+            if (am) {
+              float cxp = px + BLOCK + 2.8f;
+              float czp = pz + 8.0f + frand(cs) * (BLOCK - 16.0f);
+              float cyaw = frand(cs) < 0.5f ? 0.0f : 3.14159f;
+              append_model(p.v, *am, cxp, czp, cyaw, 1.0f, 0.0f);
+              c.colliders.push_back({{cxp - 1.25f, -1.0f, czp - 2.5f},
+                                     {cxp + 1.25f, 1.8f, czp + 2.5f}});
+            }
           }
         }
       }

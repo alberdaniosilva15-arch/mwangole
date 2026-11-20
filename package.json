@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "draco3d": "^1.5.9",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0"
   }
