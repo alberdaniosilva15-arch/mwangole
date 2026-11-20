@@ -285,7 +285,7 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
     for (int x = 0; x < S; ++x) {
       float n = hashf(x, y);
       float patch = fbm(x * 0.035f, y * 0.035f, 2);
-      int v = (int)(70 + n * 13 + patch * 18);
+      int v = (int)(58 + n * 13 + patch * 18);
       if (((x * 7 + y * 13) % 97) == 0) v += 16;
       set_px(layer, S, x, y, v + 4, v, v - 7, 255);
     }
@@ -294,7 +294,7 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
   // 2 sidewalk
   for (int y = 0; y < S; ++y) {
     for (int x = 0; x < S; ++x) {
-      int v = 112 + (int)(hashf(x, y) * 12);
+      int v = 96 + (int)(hashf(x, y) * 12);
       if ((x % 32) < 2 || (y % 32) < 2) v = 90;
       if ((x % 32) < 3 && (y % 32) < 3) v = 100;
       set_px(layer, S, x, y, v + 3, v - 2, v - 9, 255);

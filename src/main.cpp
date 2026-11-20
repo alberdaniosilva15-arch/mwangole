@@ -60,6 +60,14 @@ static CarMeshes g_car_base;
 static CarMeshes g_car_inst;
 static CarBuffers g_car_bufs;
 
+// Carros do utilizador (GLB): 0 sedan, 1 hatch, 2 exotic, 3 policia.
+struct GlbCar {
+  CarMeshes cm;
+  CarBuffers bufs;
+};
+static GlbCar g_glb_cars[4];
+static bool g_glb_ready = false;
+
 static PlayerMeshes g_player_mesh;
 
 static Car g_car;
@@ -478,6 +486,16 @@ EMSCRIPTEN_KEEPALIVE const char* mw_debug_lot(float x, float z) {
   return out.c_str();
 }
 
+EMSCRIPTEN_KEEPALIVE const char* mw_debug_cars() {
+  static std::string out;
+  char buf[128];
+  std::snprintf(buf, sizeof(buf), "ready=%d sedan=%d hatch=%d exotic=%d police=%d", g_glb_ready ? 1 : 0,
+                (int)g_glb_cars[0].cm.glb.count, (int)g_glb_cars[1].cm.glb.count,
+                (int)g_glb_cars[2].cm.glb.count, (int)g_glb_cars[3].cm.glb.count);
+  out.assign(buf);
+  return out.c_str();
+}
+
 EMSCRIPTEN_KEEPALIVE int mw_debug_lot_count() { return (int)lot_records().size(); }
 
 // Triangulos por chunk: "cx,cz,lod1,tris,dist,far|..." para saber onde esta a massa.
@@ -689,16 +707,16 @@ static void update_time_of_day(float dt) {
 
   // Ambiente: ceu alto o suficiente para as paredes existirem sem sol directo,
   // chao baixo para nao achatar tudo. O contraste vem do sol rasante + AO.
-  g_amb_sky = mixv(mixv(v3(0.115f, 0.135f, 0.195f), v3(0.255f, 0.285f, 0.345f), day),
+  g_amb_sky = mixv(mixv(v3(0.115f, 0.135f, 0.195f), v3(0.38f, 0.42f, 0.50f), day),
                    v3(0.30f, 0.20f, 0.15f), dusk * 0.35f);
-  g_amb_gnd = mixv(mixv(v3(0.050f, 0.055f, 0.070f), v3(0.100f, 0.096f, 0.090f), day),
+  g_amb_gnd = mixv(mixv(v3(0.050f, 0.055f, 0.070f), v3(0.15f, 0.14f, 0.13f), day),
                    v3(0.20f, 0.13f, 0.10f), dusk * 0.4f);
-  g_sky_hor = mixv(mixv(v3(0.05f, 0.07f, 0.12f), v3(0.78f, 0.85f, 0.93f), day),
+  g_sky_hor = mixv(mixv(v3(0.05f, 0.07f, 0.12f), v3(0.60f, 0.72f, 0.88f), day),
                    v3(0.98f, 0.55f, 0.30f), dusk * 0.75f);
   // O fog tem de ser a cor do horizonte, senao ha uma costura visivel onde o
   // edificio distante encontra o ceu.
   g_fog_col = v3(g_sky_hor.x * 1.02f, g_sky_hor.y * 1.02f, g_sky_hor.z * 1.02f);
-  g_sky_zen = mixv(mixv(v3(0.012f, 0.020f, 0.055f), v3(0.20f, 0.42f, 0.74f), day),
+  g_sky_zen = mixv(mixv(v3(0.012f, 0.020f, 0.055f), v3(0.11f, 0.28f, 0.62f), day),
                    v3(0.22f, 0.22f, 0.42f), dusk * 0.6f);
   g_sky_mul = mixv(mixv(v3(0.12f, 0.15f, 0.22f), v3(1.0f, 1.0f, 1.0f), day),
                    v3(1.05f, 0.75f, 0.58f), dusk * 0.5f);
@@ -975,6 +993,20 @@ static void render_sky(const Frustum& fr, const Mat4& view, const Mat4& proj, fl
   glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
+// Escolhe o carro a desenhar: modelo do utilizador quando existe, senao procedural.
+static int car_model_for(const V3& p) {
+  uint32_t h = (uint32_t)(int)(p.x * 7.0f) * 73856093u ^ (uint32_t)(int)(p.z * 7.0f) * 19349663u;
+  return (int)(h % 3u);
+}
+
+static void draw_any_car(const V3& pos, float yaw, uint32_t color, float steer, float spin, int model) {
+  if (g_glb_ready && model >= 0 && model < 4 && g_glb_cars[model].cm.glb.count) {
+    draw_car(g_carProg, g_glb_cars[model].cm, g_glb_cars[model].bufs, pos, yaw, color, steer, spin);
+  } else {
+    draw_car(g_carProg, g_car_inst, g_car_bufs, pos, yaw, color, steer, spin);
+  }
+}
+
 static void render_cars(const V3& eye, const Mat4& vp) {
   glUseProgram(g_carProg.id);
   glUniformMatrix4fv(g_carProg.vp, 1, GL_FALSE, vp.m);
@@ -986,18 +1018,16 @@ static void render_cars(const V3& eye, const Mat4& vp) {
                       eye);
 
   for (const auto& p : g_parked) {
-    draw_car(g_carProg, g_car_inst, g_car_bufs, p.pos, p.yaw, p.color, 0.0f, 0.0f);
+    draw_any_car(p.pos, p.yaw, p.color, 0.0f, 0.0f, car_model_for(p.pos));
   }
   for (const auto& t : g_traffic) {
     if (length(t.pos - eye) > 420.0f) continue;
-    draw_car(g_carProg, g_car_inst, g_car_bufs, t.pos, t.yaw, t.color, t.steerVis, t.wheelSpin);
+    draw_any_car(t.pos, t.yaw, t.color, t.steerVis, t.wheelSpin, car_model_for(t.pos));
   }
   for (const auto& c : g_cops) {
-    draw_car(g_carProg, g_car_inst, g_car_bufs, c.pos, c.yaw, tint3(0.88f, 0.89f, 0.91f),
-             c.steerVis, c.wheelSpin);
+    draw_any_car(c.pos, c.yaw, tint3(0.88f, 0.89f, 0.91f), c.steerVis, c.wheelSpin, 3);
   }
-  draw_car(g_carProg, g_car_inst, g_car_bufs, g_car.pos, g_car.yaw, tint3(0.85f, 0.16f, 0.10f),
-           g_car.steerVis, g_car.wheelSpin);
+  draw_any_car(g_car.pos, g_car.yaw, tint3(0.85f, 0.16f, 0.10f), g_car.steerVis, g_car.wheelSpin, 2);
 }
 
 static void render_cop_lights(const V3& eye, const Mat4& vp) {
@@ -1411,6 +1441,8 @@ int main() {
   g_car_inst.body = clone_with_instances(g_car_base.body, g_car_bufs.body, true);
   g_car_inst.detail = clone_with_instances(g_car_base.detail, g_car_bufs.detail, false);
   g_car_inst.wheel = clone_with_instances(g_car_base.wheel, g_car_bufs.wheel, false);
+
+
   g_player_mesh = make_player_meshes(player_look());
   for (int i = 0; i < 4; ++i) g_ped_looks[i] = make_player_meshes(street_look(i));
   g_cop_light_mesh = make_cop_light_mesh();
@@ -1434,6 +1466,23 @@ int main() {
       verts += (int)m.verts.size();
     }
     mw_assets_js((int)assets_all().size(), tris, verts);
+  }
+
+  // Carros do utilizador: tem de ser depois de assets_load, senao asset_get
+  // devolve nulo e o jogo fica com os carros procedurais.
+  {
+    const char* names[4] = {"meus/oc_sedan", "meus/oc_hatch", "meus/oc_exotic", "meus/oc_police"};
+    for (int i = 0; i < 4; ++i) {
+      const AssetModel* m = asset_get(names[i]);
+      if (!m || m->verts.empty()) continue;
+      Verts v;
+      v.v = m->verts;
+      v.i = m->idx;
+      Mesh base = mesh_upload(v);
+      g_glb_cars[i].bufs = make_car_buffers();
+      g_glb_cars[i].cm.glb = clone_with_instances(base, g_glb_cars[i].bufs.body, true);
+    }
+    g_glb_ready = g_glb_cars[0].cm.glb.count != 0;
   }
 
   build_city(g_city, g_tree_mesh, g_lamp_mesh);

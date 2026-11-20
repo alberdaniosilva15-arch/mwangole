@@ -44,6 +44,7 @@ inline void cbox(Verts& v, float x0, float z0, float x1, float z1, float y0, flo
 
 struct CarMeshes {
   Mesh body, detail, wheel;
+  Mesh glb;   // modelo do utilizador (carro inteiro, rodas incluidas)
 };
 
 inline Mesh make_wheel_mesh() {
@@ -447,6 +448,13 @@ inline void draw_car(CarProg& prog, const CarMeshes& cm, const CarBuffers& bufs,
 
   glUniform1i(prog.tintMode, 1);
   glUniform1f(prog.spec, 1.0f);
+  // Carro vindo do GLB: desenha-se inteiro, com as cores do modelo.
+  if (cm.glb.count) {
+    glUniform1i(prog.tintMode, 0);
+    glBindVertexArray(cm.glb.vao);
+    glDrawElementsInstanced(GL_TRIANGLES, cm.glb.count, GL_UNSIGNED_INT, nullptr, 1);
+    return;
+  }
   glBindVertexArray(cm.body.vao);
   glDrawElementsInstanced(GL_TRIANGLES, cm.body.count, GL_UNSIGNED_INT, nullptr, 1);
   glUniform1i(prog.tintMode, 0);
