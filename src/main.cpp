@@ -993,12 +993,8 @@ static void render_sky(const Frustum& fr, const Mat4& view, const Mat4& proj, fl
   glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-// Escolhe o carro a desenhar: modelo do utilizador quando existe, senao procedural.
-static int car_model_for(const V3& p) {
-  uint32_t h = (uint32_t)(int)(p.x * 7.0f) * 73856093u ^ (uint32_t)(int)(p.z * 7.0f) * 19349663u;
-  return (int)(h % 3u);
-}
-
+// O modelo tem de ser estavel por carro. Antes era hash da posicao, o que fazia
+// o carro trocar de modelo enquanto andava.
 static void draw_any_car(const V3& pos, float yaw, uint32_t color, float steer, float spin, int model) {
   if (g_glb_ready && model >= 0 && model < 4 && g_glb_cars[model].cm.glb.count) {
     draw_car(g_carProg, g_glb_cars[model].cm, g_glb_cars[model].bufs, pos, yaw, color, steer, spin);
@@ -1017,17 +1013,25 @@ static void render_cars(const V3& eye, const Mat4& vp) {
                       g_carProg.camPos, g_carProg.fogCol, g_carProg.fogNear, g_carProg.fogFar,
                       eye);
 
-  for (const auto& p : g_parked) {
-    draw_any_car(p.pos, p.yaw, p.color, 0.0f, 0.0f, car_model_for(p.pos));
+  {
+    int i = 0;
+    for (const auto& p : g_parked) {
+      draw_any_car(p.pos, p.yaw, p.color, 0.0f, 0.0f, i % 3);
+      ++i;
+    }
   }
-  for (const auto& t : g_traffic) {
-    if (length(t.pos - eye) > 420.0f) continue;
-    draw_any_car(t.pos, t.yaw, t.color, t.steerVis, t.wheelSpin, car_model_for(t.pos));
+  {
+    int i = 0;
+    for (const auto& t : g_traffic) {
+      if (length(t.pos - eye) > 420.0f) { ++i; continue; }
+      draw_any_car(t.pos, t.yaw, t.color, t.steerVis, t.wheelSpin, 1 + (i % 2));
+      ++i;
+    }
   }
   for (const auto& c : g_cops) {
     draw_any_car(c.pos, c.yaw, tint3(0.88f, 0.89f, 0.91f), c.steerVis, c.wheelSpin, 3);
   }
-  draw_any_car(g_car.pos, g_car.yaw, tint3(0.85f, 0.16f, 0.10f), g_car.steerVis, g_car.wheelSpin, 2);
+  draw_any_car(g_car.pos, g_car.yaw, tint3(0.85f, 0.16f, 0.10f), g_car.steerVis, g_car.wheelSpin, 0);
 }
 
 static void render_cop_lights(const V3& eye, const Mat4& vp) {

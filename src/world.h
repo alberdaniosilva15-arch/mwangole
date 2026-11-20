@@ -1116,8 +1116,24 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
       }
 
       const char* special = nullptr;
-      if (px == 104.0f && pz == 208.0f) special = "meus/condominio_apartamentos";
-      else if (px == 104.0f && pz == 312.0f) special = "meus/predio_sanzio";
+      // Landmarks fixos: os modelos do utilizador ficam onde sao vistos logo no
+      // arranque, em vez de aparecerem ao calhas por 48 chunks.
+      {
+        static const struct { float px, pz; const char* name; } kFixed[] = {
+          {208.0f, 208.0f, "meus/oc_hotel"},
+          {208.0f, 104.0f, "meus/oc_apartments"},
+          {312.0f, 208.0f, "meus/oc_banco"},
+          {  0.0f, 208.0f, "meus/oc_showroom"},
+          {  0.0f, 104.0f, "meus/oc_garagem"},
+          {104.0f, 104.0f, "meus/oc_lojas"},
+          {312.0f, 312.0f, "meus/oc_hotel"},
+        };
+        for (const auto& f : kFixed) {
+          if (px == f.px && pz == f.pz) { special = f.name; break; }
+        }
+      }
+      if (!special && px == 104.0f && pz == 208.0f) special = "meus/condominio_apartamentos";
+      else if (!special && px == 104.0f && pz == 312.0f) special = "meus/predio_sanzio";
       // Landmark so nos quarteiroes escolhidos a mao. O condominio tem faces sem
       // textura por desenho do modelo: espalhado ao calhas, enchia a cidade de
       // blocos brancos. Fica apenas onde o yaw e controlado.
@@ -1246,8 +1262,8 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
         {
           uint32_t cs = hash32(s ^ 0x9e3779b9u);
           if (frand(cs) < 0.28f) {
-            const char* carModels[3] = {"meus/oc_sedan", "meus/oc_hatch", "meus/oc_exotic"};
-            const AssetModel* am = asset_get(carModels[(int)(frand(cs) * 3) % 3]);
+            const char* carModels[2] = {"meus/oc_hatch", "meus/oc_exotic"};
+            const AssetModel* am = asset_get(carModels[(int)(frand(cs) * 2) % 2]);
             if (am) {
               float cxp = px + BLOCK + 2.8f;
               float czp = pz + 8.0f + frand(cs) * (BLOCK - 16.0f);

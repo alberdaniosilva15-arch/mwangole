@@ -218,37 +218,37 @@
   {
    "name": "meus/oc_sedan",
    "file": "novos/oc_sedan_01.glb",
-   "cell": 0.05,
+   "cell": 0.018,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
    "name": "meus/oc_hatch",
    "file": "novos/oc_hatch_01.glb",
-   "cell": 0.04,
+   "cell": 0.02,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
    "name": "meus/oc_exotic",
    "file": "novos/oc_exotic_01.glb",
-   "cell": 0.04,
+   "cell": 0,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
    "name": "meus/oc_scooter",
    "file": "novos/oc_scooter_01.glb",
-   "cell": 0.03,
+   "cell": 0.015,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
    "name": "meus/oc_police",
    "file": "novos/oc_police_sedan_01.glb",
-   "cell": 0.05,
+   "cell": 0.02,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
    "name": "meus/oc_heli",
    "file": "novos/oc_police_heli_01.glb",
-   "cell": 0.05,
+   "cell": 0,
    "skip": ["^Damage", "^LOD[23]"]
   },
   {
