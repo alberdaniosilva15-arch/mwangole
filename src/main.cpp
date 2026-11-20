@@ -78,6 +78,10 @@ static std::vector<TrafficCar> g_traffic;
 static std::vector<StreetPed> g_peds;
 static std::vector<PoliceCar> g_cops;
 static PlayerMeshes g_ped_looks[4];
+// Personagens reais (GLB do utilizador), 4 poses do ciclo de caminhar + parado.
+static Mesh g_char_walk[4];
+static Mesh g_char_idle;
+static bool g_char_ready = false;
 static uint32_t g_street_seed = 0x51ed7a11u;
 static Mesh g_cop_light_mesh;
 static float g_heat = 0.0f;
@@ -1062,7 +1066,8 @@ static void render_player(const V3& eye, const Mat4& vp) {
   set_common_uniforms(g_pedProg.sunDir, g_pedProg.sunCol, g_pedProg.ambSky, g_pedProg.ambGround,
                       g_pedProg.camPos, g_pedProg.fogCol, g_pedProg.fogNear, g_pedProg.fogFar,
                       eye);
-  draw_player(g_pedProg, g_player_mesh, g_player);
+  if (g_char_ready) draw_player_poses(g_pedProg, g_char_walk, g_char_idle, g_player);
+  else draw_player(g_pedProg, g_player_mesh, g_player);
 }
 
 static void render_peds(const V3& eye, const Mat4& vp) {
@@ -1080,7 +1085,8 @@ static void render_peds(const V3& eye, const Mat4& vp) {
                           g_pedProg.ambGround, g_pedProg.camPos, g_pedProg.fogCol,
                           g_pedProg.fogNear, g_pedProg.fogFar, eye);
     }
-    draw_player(g_pedProg, g_ped_looks[p.variant & 3], p.w);
+    if (g_char_ready) draw_player_poses(g_pedProg, g_char_walk, g_char_idle, p.w);
+    else draw_player(g_pedProg, g_ped_looks[p.variant & 3], p.w);
   }
 }
 
@@ -1487,6 +1493,29 @@ int main() {
       g_glb_cars[i].cm.glb = clone_with_instances(base, g_glb_cars[i].bufs.body, true);
     }
     g_glb_ready = g_glb_cars[0].cm.glb.count != 0;
+  }
+
+  // Personagens: 4 poses do ciclo de caminhar, cozidas pelo conversor.
+  {
+    const char* walkNames[4] = {"chars/walk0", "chars/walk1", "chars/walk2", "chars/walk3"};
+    int n = 0;
+    for (int i = 0; i < 4; ++i) {
+      const AssetModel* m = asset_get(walkNames[i]);
+      if (!m || m->verts.empty()) continue;
+      Verts v;
+      v.v = m->verts;
+      v.i = m->idx;
+      g_char_walk[i] = mesh_upload(v);
+      ++n;
+    }
+    const AssetModel* idle = asset_get("chars/idle");
+    if (idle && !idle->verts.empty()) {
+      Verts v;
+      v.v = idle->verts;
+      v.i = idle->idx;
+      g_char_idle = mesh_upload(v);
+    }
+    g_char_ready = (n == 4 && g_char_idle.count > 0);
   }
 
   build_city(g_city, g_tree_mesh, g_lamp_mesh);

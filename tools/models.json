@@ -292,6 +292,42 @@
    "cell": 0.08,
    "tex": true,
    "brighten": 1.05
+  }  ,
+  {
+   "name": "chars/walk0",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "walk", "time": 0.06},
+   "cell": 0
+  },
+  {
+   "name": "chars/walk1",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "walk", "time": 0.30},
+   "cell": 0
+  },
+  {
+   "name": "chars/walk2",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "walk", "time": 0.54},
+   "cell": 0
+  },
+  {
+   "name": "chars/walk3",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "walk", "time": 0.78},
+   "cell": 0
+  },
+  {
+   "name": "chars/idle",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "idle", "time": 0.40},
+   "cell": 0
+  },
+  {
+   "name": "chars/run",
+   "file": "novos/oc_humanoid_base_01.glb",
+   "pose": {"anim": "run", "time": 0.35},
+   "cell": 0
   }
  ],
  "user_dir": "assets-src/meus-modelos"

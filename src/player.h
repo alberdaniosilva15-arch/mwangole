@@ -118,6 +118,19 @@ inline PlayerMeshes make_player_meshes(const PedLook& L) {
   return pm;
 }
 
+// Personagens do GLB, cozidas em poses fixas: nao ha skinning no runtime, mas
+// alternar entre 4 poses do ciclo de caminhar le-se como animacao.
+inline void draw_player_poses(WorldProg& prog, const Mesh walk[4], const Mesh& idle, const Walker& w) {
+  float amp = clampf(w.speed / 3.9f, 0.0f, 1.3f);
+  float bob = std::fabs(std::sin(w.anim)) * 0.030f * amp;
+  Mat4 m = mat_mul(mat_translate(v3(w.pos.x, w.pos.y + bob, w.pos.z)), mat_rot_y(w.yaw));
+  glUniformMatrix4fv(prog.model, 1, GL_FALSE, m.m);
+  const Mesh& mesh = (amp > 0.06f) ? walk[((int)(w.anim * 1.55f) % 4 + 4) % 4] : idle;
+  if (!mesh.count) return;
+  glBindVertexArray(mesh.vao);
+  glDrawElements(GL_TRIANGLES, mesh.count, GL_UNSIGNED_INT, nullptr);
+}
+
 inline void draw_player(WorldProg& prog, const PlayerMeshes& pm, const Walker& w) {
   float amp = clampf(w.speed / 3.9f, 0.0f, 1.3f);
   float step = std::min(amp, 1.0f);

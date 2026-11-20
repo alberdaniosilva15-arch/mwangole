@@ -45,6 +45,8 @@ function decodeDraco(gltf, bin, prim) {
     if (sem === 'POSITION') out.pos = vals;
     else if (sem === 'NORMAL') out.nrm = vals;
     else if (sem === 'TEXCOORD_0') out.uv = vals;
+    else if (sem === 'JOINTS_0') out.joints = vals;
+    else if (sem === 'WEIGHTS_0') out.weights = vals;
   }
   const faces = mesh.num_faces();
   const idx = new Uint32Array(faces * 3);
@@ -335,8 +337,114 @@ function skinUv(layer, p, n) {
   return [u * s[0], p[1] * s[1]];
 }
 
+function readMat4Array(gltf, bin, accessorIdx) {
+  const acc = gltf.accessors[accessorIdx];
+  const bv = gltf.bufferViews[acc.bufferView];
+  const off = (bv.byteOffset || 0) + (acc.byteOffset || 0);
+  const out = [];
+  for (let i = 0; i < acc.count; ++i) {
+    const m = new Float64Array(16);
+    for (let k = 0; k < 16; ++k) m[k] = bin.readFloatLE(off + i * 64 + k * 4);
+    out.push(m);
+  }
+  return out;
+}
+
+function slerpQuat(a, b, t) {
+  let ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  let bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  let dot = ax * bx + ay * by + az * bz + aw * bw;
+  if (dot < 0) { bx = -bx; by = -by; bz = -bz; bw = -bw; dot = -dot; }
+  if (dot > 0.9995) {
+    const r = [ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t, aw + (bw - aw) * t];
+    const l = Math.hypot(r[0], r[1], r[2], r[3]) || 1;
+    return r.map((v) => v / l);
+  }
+  const th = Math.acos(Math.max(-1, Math.min(1, dot)));
+  const s = Math.sin(th);
+  const wa = Math.sin((1 - t) * th) / s, wb = Math.sin(t * th) / s;
+  return [ax * wa + bx * wb, ay * wa + by * wb, az * wa + bz * wb, aw * wa + bw * wb];
+}
+
+function sampleChannel(gltf, bin, anim, node, path, time, fallback) {
+  const ch = (anim.channels || []).find((c) => c.target.node === node && c.target.path === path);
+  if (!ch) return fallback;
+  const smp = anim.samplers[ch.sampler];
+  const times = readAccessorFloat(gltf, bin, smp.input);
+  const vals = readAccessorFloat(gltf, bin, smp.output);
+  const comps = path === 'rotation' ? 4 : 3;
+  const n = times.length;
+  if (!n) return fallback;
+  let t = time;
+  if (t <= times[0]) t = times[0];
+  if (t >= times[n - 1]) t = times[n - 1];
+  let i = 0;
+  while (i < n - 2 && times[i + 1] < t) ++i;
+  const t0 = times[i], t1 = times[i + 1] ?? times[i];
+  const k = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+  const a = Array.from(vals.slice(i * comps, i * comps + comps));
+  const b = Array.from(vals.slice((i + 1) * comps, (i + 1) * comps + comps));
+  if (path === 'rotation') return slerpQuat(a, b, k);
+  return a.map((v, idx) => v + ((b[idx] ?? v) - v) * k);
+}
+
+// Calcula as matrizes de pele (world * inverseBind) para uma pose de uma animacao.
+function skinMatricesForPose(gltf, bin, anim, time) {
+  const skin = gltf.skins[0];
+  const ibm = readMat4Array(gltf, bin, skin.inverseBindMatrices);
+  const nodes = gltf.nodes;
+  const parent = new Array(nodes.length).fill(-1);
+  nodes.forEach((n, i) => (n.children || []).forEach((c) => { parent[c] = i; }));
+  const worldCache = new Map();
+  function worldOf(i) {
+    if (worldCache.has(i)) return worldCache.get(i);
+    const n = nodes[i];
+    const tr = sampleChannel(gltf, bin, anim, i, 'translation', time, n.translation || [0, 0, 0]);
+    const ro = sampleChannel(gltf, bin, anim, i, 'rotation', time, n.rotation || [0, 0, 0, 1]);
+    const sc = sampleChannel(gltf, bin, anim, i, 'scale', time, n.scale || [1, 1, 1]);
+    const local = anim ? matTrs(tr, ro, sc) : nodeMatrix(n);
+    const p = parent[i];
+    const m = p >= 0 ? matMul(worldOf(p), local) : local;
+    worldCache.set(i, m);
+    return m;
+  }
+  return skin.joints.map((jointIdx, j) => matMul(worldOf(jointIdx), ibm[j]));
+}
+
+function applyPose(gltf, bin, anim, time, pos, nrm, joints, weights, vcount) {
+  const skinMats = skinMatricesForPose(gltf, bin, anim, time);
+  const outPos = new Float32Array(pos.length);
+  const outNrm = nrm ? new Float32Array(nrm.length) : null;
+  for (let i = 0; i < vcount; ++i) {
+    const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+    let rx = 0, ry = 0, rz = 0;
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < 4; ++k) {
+      const w = weights[i * 4 + k];
+      if (w <= 0) continue;
+      const m = skinMats[joints[i * 4 + k]];
+      if (!m) continue;
+      rx += w * (m[0] * px + m[4] * py + m[8] * pz + m[12]);
+      ry += w * (m[1] * px + m[5] * py + m[9] * pz + m[13]);
+      rz += w * (m[2] * px + m[6] * py + m[10] * pz + m[14]);
+      if (nrm) {
+        const ox = nrm[i * 3], oy = nrm[i * 3 + 1], oz = nrm[i * 3 + 2];
+        nx += w * (m[0] * ox + m[4] * oy + m[8] * oz);
+        ny += w * (m[1] * ox + m[5] * oy + m[9] * oz);
+        nz += w * (m[2] * ox + m[6] * oy + m[10] * oz);
+      }
+    }
+    outPos[i * 3] = rx; outPos[i * 3 + 1] = ry; outPos[i * 3 + 2] = rz;
+    if (outNrm) {
+      const l = Math.hypot(nx, ny, nz) || 1;
+      outNrm[i * 3] = nx / l; outNrm[i * 3 + 1] = ny / l; outNrm[i * 3 + 2] = nz / l;
+    }
+  }
+  return { pos: outPos, nrm: outNrm };
+}
+
 function convertModel(file, bright = 1, pick = null, skin = false, skinMap = null, skip = null,
-                      skinTint = 1, tintMul = null, texMode = false) {
+                      skinTint = 1, tintMul = null, texMode = false, pose = null) {
   const { gltf, bin } = parseGlb(file);
   const verts = [];
   const idx = [];
@@ -432,22 +540,38 @@ function convertModel(file, bright = 1, pick = null, skin = false, skinMap = nul
 
   function addMesh(meshIdx, world) {
     const mesh = gltf.meshes[meshIdx];
-    const nm = normalMatrix(world);
     for (const prim of mesh.primitives) {
       if ((prim.mode === undefined ? 4 : prim.mode) !== 4) continue;
-      let pos, nrm, ind, uvRaw = null;
+      let pos, nrm, ind, uvRaw = null, jointsRaw = null, weightsRaw = null;
       if (prim.extensions && prim.extensions.KHR_draco_mesh_compression) {
         const d = decodeDraco(gltf, bin, prim);
         pos = d.pos;
         nrm = d.nrm;
         ind = d.ind;
         uvRaw = d.uv;
+        jointsRaw = d.joints || null;
+        weightsRaw = d.weights || null;
       } else {
         pos = readAccessor(gltf, bin, prim.attributes.POSITION);
         nrm = prim.attributes.NORMAL !== undefined ? readAccessor(gltf, bin, prim.attributes.NORMAL) : null;
         ind = prim.indices !== undefined ? readAccessor(gltf, bin, prim.indices) : null;
         uvRaw = prim.attributes.TEXCOORD_0 !== undefined ? readAccessorFloat(gltf, bin, prim.attributes.TEXCOORD_0) : null;
       }
+      let worldUse = world;
+      // Pose fixa de uma animacao esquelética: aplica a pele e usa identidade.
+      if (pose && (jointsRaw || prim.attributes.JOINTS_0 !== undefined) && gltf.skins && gltf.skins.length) {
+        const joints = jointsRaw || readAccessor(gltf, bin, prim.attributes.JOINTS_0);
+        const weights = weightsRaw || readAccessorFloat(gltf, bin, prim.attributes.WEIGHTS_0);
+        const anims = gltf.animations || [];
+        const anim = anims.find((a) => a.name === pose.anim) || anims[0];
+        if (anim) {
+          const posed = applyPose(gltf, bin, anim, pose.time, pos, nrm, joints, weights, pos.length / 3);
+          pos = posed.pos;
+          nrm = posed.nrm;
+          worldUse = matIdentity();
+        }
+      }
+      const nm = normalMatrix(worldUse);
       const cnt = pos.length / 3;
       const base = verts.length;
       const matIdx = prim.material !== undefined ? prim.material : 0;
@@ -668,7 +792,7 @@ for (const entry of cfg.models) {
   const pick = e.pick ? (Array.isArray(e.pick) ? e.pick : [e.pick]) : null;
   const skip = e.skip ? e.skip.map((r) => new RegExp(r)) : null;
   const raw = convertModel(file, e.brighten || 1, pick, !!e.skin || skinAuto(name), e.skin_map || null, skip,
-    e.skin_tint || 1, e.tint || null, !!e.tex);
+    e.skin_tint || 1, e.tint || null, !!e.tex, e.pose || null);
   if (e.scale && e.scale !== 1) {
     for (const v of raw.verts) {
       v.p[0] *= e.scale; v.p[1] *= e.scale; v.p[2] *= e.scale;

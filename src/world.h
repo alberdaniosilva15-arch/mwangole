@@ -1145,6 +1145,21 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
         continue;
       }
 
+      // Heliponto fixo com o helicoptero estacionado (visivel a partir da Baixa).
+      if (px == 208.0f && pz == 312.0f) {
+        g.top(px + 14.0f, pz + 22.0f, px + 70.0f, pz + 70.0f, 0.175f, L_CONCRETE,
+              tint3(0.70f, 0.70f, 0.68f), 5.0f);
+        g.top(px + 18.0f, pz + 26.0f, px + 66.0f, pz + 66.0f, 0.180f, L_SIDEWALK,
+              tint3(0.86f, 0.86f, 0.84f), 4.0f);
+        // "H" pintado no pad
+        g.top(px + 34.0f, pz + 34.0f, px + 38.0f, pz + 58.0f, 0.184f, L_WHITE, 0xffffffff, 2.0f);
+        g.top(px + 46.0f, pz + 34.0f, px + 50.0f, pz + 58.0f, 0.184f, L_WHITE, 0xffffffff, 2.0f);
+        g.top(px + 38.0f, pz + 43.0f, px + 46.0f, pz + 49.0f, 0.184f, L_WHITE, 0xffffffff, 2.0f);
+        const AssetModel* hm = asset_get("meus/oc_heli");
+        if (hm) append_model(b.v, *hm, px + 42.0f, pz + 46.0f, 0.7f, 1.0f, 0.185f);
+        continue;
+      }
+
       float plaza_chance = dist == D_MUSSEQUE ? 0.05f : dist == D_ALTA ? 0.22f : 0.15f;
       bool plaza = poi ? (poi->kind == 6) : frand(s) < plaza_chance;
       if (plaza) {
@@ -1262,8 +1277,8 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
         {
           uint32_t cs = hash32(s ^ 0x9e3779b9u);
           if (frand(cs) < 0.28f) {
-            const char* carModels[2] = {"meus/oc_hatch", "meus/oc_exotic"};
-            const AssetModel* am = asset_get(carModels[(int)(frand(cs) * 2) % 2]);
+            const char* carModels[3] = {"meus/oc_hatch", "meus/oc_exotic", "meus/oc_scooter"};
+            const AssetModel* am = asset_get(carModels[(int)(frand(cs) * 3) % 3]);
             if (am) {
               float cxp = px + BLOCK + 2.8f;
               float czp = pz + 8.0f + frand(cs) * (BLOCK - 16.0f);

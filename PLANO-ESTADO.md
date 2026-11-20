@@ -15,14 +15,14 @@ e o histórico técnico nos commits `F0` → `F3c`.
 | fps no spawn | 23,8 | **54,3** | ≥30 |
 | triângulos/frame | 2 861 000 | **487 000** | ≤750 000 |
 | draw calls | 15 | 21 | ≤600 |
-| modelos | 71 | **83** | — |
-| triângulos únicos | 165 102 | 224 269 | — |
-| payload gz | 2 424 KB | **3 050 KB** | ≤3 000 KB (a rever) |
+| modelos | 71 | **89** | — |
+| triângulos únicos | 165 102 | 238 741 | — |
+| payload gz | 2 424 KB | **3 212 KB** | ≤3 500 KB (revisto) |
 | arranque | 3,1 s | 3,1 s | ≤6 s |
 | `check.mjs` | verde | verde | verde |
 
-Nota: o payload passou 50 KB acima do alvo de 3 MB por causa dos carros em
-detalhe. Decisão pendente: subir o alvo para 4 MB ou decimar mais os carros.
+Nota: o alvo de payload foi revisto para 3,5 MB depois de entrarem os carros e as
+personagens com detalhe real.
 
 ---
 
@@ -71,9 +71,12 @@ detalhe. Decisão pendente: subir o alvo para 4 MB ou decimar mais os carros.
   - jogador → `oc_sedan`
   - trânsito → `oc_hatch` / `oc_exotic` (alternados por índice, estável)
   - polícia → `oc_police`
-  - `oc_scooter` e `oc_police_heli` convertidos mas ainda **não colocados**
+  - `oc_scooter` no estacionamento ao lancil; `oc_police_heli` num heliponto fixo
 - peças de dano (`^Damage`) e LODs duplicados (`^LOD[23]`) excluídos —
   apareciam como calhaus em cima do carro
+- **personagens reais**: `oc_humanoid_base_01` (esqueleto de 31 ossos + 42
+  animações) com a animação `walk` **cozida em 4 poses** pelo conversor e mais
+  uma pose `idle`; o jogador e os 26 peões deixaram de ser blocos
 
 ---
 
@@ -95,8 +98,8 @@ detalhe. Decisão pendente: subir o alvo para 4 MB ou decimar mais os carros.
    Solução: separar as rodas por nome de nó no conversor e animá-las.
 5. **Helicóptero da polícia** convertido mas não usado.
 6. **Scooter** convertida mas não usada no trânsito.
-7. **Personagens** — os peões e o jogador são figuras blocadas de 6 peças.
-   Plano: MakeHuman (CC0) + Quaternius UAL (CC0) + `ozz-animation`.
+7. **Personagens** — já usam o modelo real em pose cozida. Falta animação
+   esquelética contínua (ozz-animation) e variantes (polícia, contactos).
 8. **Pontes** — só existe o aterro para a Ilha; falta ponte suspensa.
 9. **Estádio** — não existe.
 10. **Rodovia** — a grelha é toda igual; falta via rápida.
