@@ -56,6 +56,7 @@ struct AssetModel {
   AABB bounds{};
   int tris = 0;
   bool textured = false;
+  mutable int dom_layer = -999;   // cache da camada dominante das faces laterais
   Mesh mesh;
 };
 

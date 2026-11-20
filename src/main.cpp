@@ -28,6 +28,8 @@ static V3 g_sun_col = {1.00f, 0.92f, 0.79f};
 static V3 g_amb_sky = {0.32f, 0.36f, 0.44f};
 static V3 g_amb_gnd = {0.17f, 0.16f, 0.15f};
 static V3 g_fog_col = {0.72f, 0.78f, 0.85f};
+static float g_fog_near = 120.0f;
+static float g_fog_far = 620.0f;
 static V3 g_sky_hor = {0.78f, 0.85f, 0.93f};
 static V3 g_sky_zen = {0.20f, 0.42f, 0.74f};
 static V3 g_sky_mul = {1.0f, 1.0f, 1.0f};
@@ -586,8 +588,8 @@ static void set_common_uniforms(GLint sunDir, GLint sunCol, GLint ambSky, GLint 
   glUniform3f(ambGround, g_amb_gnd.x, g_amb_gnd.y, g_amb_gnd.z);
   glUniform3f(camPos, cam.x, cam.y, cam.z);
   glUniform3f(fogCol, g_fog_col.x, g_fog_col.y, g_fog_col.z);
-  glUniform1f(fogNear, 220.0f);
-  glUniform1f(fogFar, 1150.0f);
+  glUniform1f(fogNear, g_fog_near);
+  glUniform1f(fogFar, g_fog_far);
 }
 
 static void update_camera(float dt, V3& out_eye, V3& out_target) {
@@ -644,7 +646,16 @@ static void update_time_of_day(float dt) {
   float phi = 6.2831853f * (g_tod - 0.25f);
   float el = std::sin(phi);
   float hz = std::cos(phi);
-  g_sun_dir = normalize(v3(0.72f * hz, el, -0.52f * hz));
+  // O sol nunca chega a pino: a 90 graus todas as paredes ficam com ndl=0 e a
+  // cidade apaga-se. 0.82 mantem-no abaixo de ~55 graus.
+  float el_lit = el * 0.82f;
+  float hz_lit = std::sqrt(std::max(0.0001f, 1.0f - el_lit * el_lit));
+  // O azimute roda com a hora: sem isto todas as ruas norte-sul ficam com a
+  // mesma cara iluminada e a outra morta, e a cidade parece um diorama.
+  float az = (g_tod - 0.25f) * 0.85f;
+  float ca = std::cos(az), sa = std::sin(az);
+  float bx = 0.72f * hz_lit, bz = -0.52f * hz_lit;
+  g_sun_dir = normalize(v3(bx * ca - bz * sa, el_lit, bx * sa + bz * ca));
 
   float day = clampf((el + 0.04f) / 0.30f, 0.0f, 1.0f);
   float night = 1.0f - clampf((el + 0.18f) / 0.34f, 0.0f, 1.0f);
@@ -652,22 +663,29 @@ static void update_time_of_day(float dt) {
   g_day = day;
   g_night = night;
 
-  V3 sun = mixv(v3(0.88f, 0.82f, 0.72f), v3(1.15f, 0.52f, 0.22f), dusk * 0.9f);
+  V3 sun = mixv(v3(1.02f, 0.94f, 0.82f), v3(1.15f, 0.52f, 0.22f), dusk * 0.9f);
   sun = mixv(v3(0.13f, 0.16f, 0.24f), sun, day);
   g_sun_col = sun;
 
-  g_amb_sky = mixv(mixv(v3(0.095f, 0.115f, 0.175f), v3(0.27f, 0.31f, 0.38f), day),
+  // Ambiente: ceu alto o suficiente para as paredes existirem sem sol directo,
+  // chao baixo para nao achatar tudo. O contraste vem do sol rasante + AO.
+  g_amb_sky = mixv(mixv(v3(0.115f, 0.135f, 0.195f), v3(0.255f, 0.285f, 0.345f), day),
                    v3(0.30f, 0.20f, 0.15f), dusk * 0.35f);
-  g_amb_gnd = mixv(mixv(v3(0.055f, 0.060f, 0.080f), v3(0.145f, 0.135f, 0.125f), day),
+  g_amb_gnd = mixv(mixv(v3(0.050f, 0.055f, 0.070f), v3(0.100f, 0.096f, 0.090f), day),
                    v3(0.20f, 0.13f, 0.10f), dusk * 0.4f);
-  g_fog_col = mixv(mixv(v3(0.060f, 0.080f, 0.125f), v3(0.72f, 0.78f, 0.85f), day),
-                   v3(0.86f, 0.55f, 0.35f), dusk * 0.7f);
   g_sky_hor = mixv(mixv(v3(0.05f, 0.07f, 0.12f), v3(0.78f, 0.85f, 0.93f), day),
                    v3(0.98f, 0.55f, 0.30f), dusk * 0.75f);
+  // O fog tem de ser a cor do horizonte, senao ha uma costura visivel onde o
+  // edificio distante encontra o ceu.
+  g_fog_col = v3(g_sky_hor.x * 1.02f, g_sky_hor.y * 1.02f, g_sky_hor.z * 1.02f);
   g_sky_zen = mixv(mixv(v3(0.012f, 0.020f, 0.055f), v3(0.20f, 0.42f, 0.74f), day),
                    v3(0.22f, 0.22f, 0.42f), dusk * 0.6f);
   g_sky_mul = mixv(mixv(v3(0.12f, 0.15f, 0.22f), v3(1.0f, 1.0f, 1.0f), day),
                    v3(1.05f, 0.75f, 0.58f), dusk * 0.5f);
+
+  // Fog a 1150 m nunca acontecia: os predios distantes cortavam a pico no ceu.
+  g_fog_near = 80.0f + 45.0f * day;
+  g_fog_far = 420.0f + 210.0f * day + 120.0f * dusk;
 }
 
 // ------------------------------------------------------------------ estafeta
@@ -888,8 +906,8 @@ static void render_water(const Frustum& fr, const V3& eye, const Mat4& vp, float
   glUniform3f(g_water.sunCol, g_sun_col.x * 1.12f, g_sun_col.y * 1.11f, g_sun_col.z * 1.11f);
   glUniform3f(g_water.fogCol, g_fog_col.x, g_fog_col.y, g_fog_col.z);
   glUniform3f(g_water.skyMul, g_sky_mul.x, g_sky_mul.y, g_sky_mul.z);
-  glUniform1f(g_water.fogNear, 220.0f);
-  glUniform1f(g_water.fogFar, 1150.0f);
+  glUniform1f(g_water.fogNear, g_fog_near);
+  glUniform1f(g_water.fogFar, g_fog_far);
   glUniform1f(g_water.time, time);
   draw_mesh(g_city.sea);
 }

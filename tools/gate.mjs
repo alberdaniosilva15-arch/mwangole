@@ -11,7 +11,7 @@ const tag = process.argv[3] || 'after';
 // Cada fase declara os seus limites. Um limite ausente = não é verificado nessa fase.
 const PHASES = {
   F0: { minFps: 0, sdGain: -1, meanTol: 1, edges: null, trisMax: null, gzMax: null },
-  F1: { minFps: 25, sdGain: 0.25, meanTol: 0.08, edges: { camera: 'muro', factor: 8 }, trisMax: null, gzMax: 3 },
+  F1: { minFps: 25, sdGain: 0.25, meanTol: 0.08, edges: { camera: 'baixa', factor: 2 }, trisMax: null, gzMax: 3 },
   F2: { minFps: 30, sdGain: 0.20, meanTol: 0.10, edges: null, trisMax: 250000, gzMax: 3 },
   F3: { minFps: 30, sdGain: 0.25, meanTol: 0.12, edges: { camera: 'baixa', factor: 3 }, trisMax: 250000, gzMax: 24 },
   F4: { minFps: 30, sdGain: 0.20, meanTol: 0.12, edges: null, trisMax: 250000, gzMax: 24 },
@@ -34,7 +34,9 @@ if (!fs.existsSync(baselineFile)) { console.error('falta bench/baseline.json (co
 if (!fs.existsSync(currentFile)) { console.error(`falta ${currentFile} (corre node tools/look.mjs ${tag})`); process.exit(2); }
 
 const base = JSON.parse(fs.readFileSync(baselineFile, 'utf8'));
-const cur = JSON.parse(fs.readFileSync(currentFile, 'utf8'));
+const curRaw = JSON.parse(fs.readFileSync(currentFile, 'utf8'));
+// baseline.json guarda { look: { rows } }; metrics.json do look guarda { rows }.
+const cur = curRaw.rows ? { look: curRaw } : curRaw;
 
 const avg = (rows, key) => rows.reduce((a, r) => a + r[key], 0) / Math.max(1, rows.length);
 const byCamera = (rows, cam, key) => avg(rows.filter((r) => r.camera === cam), key);

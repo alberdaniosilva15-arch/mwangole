@@ -102,14 +102,51 @@ inline void tint_verts(Verts& v, size_t from, float r, float g, float b) {
   }
 }
 
+// Oclusao falsa: escurece a base do edificio e devolve o peso que o contacto com
+// o chao da. Nao cria vertices nem draw calls; so mexe na cor por vertice.
+inline void shade_ao(Verts& v, size_t from, float baseY, float h) {
+  const float hh = h < 1.0f ? 1.0f : h;
+  for (size_t i = from; i < v.v.size(); ++i) {
+    Vertex& vt = v.v[i];
+    float t = clampf((vt.py - baseY) / hh, 0.0f, 1.0f);
+    float k = 0.62f + 0.38f * std::pow(t, 0.35f);
+    uint32_t c = vt.color;
+    int cr = (int)((c & 255) * k), cg = (int)(((c >> 8) & 255) * k),
+        cb = (int)(((c >> 16) & 255) * k);
+    vt.color = rgba(cr > 255 ? 255 : cr, cg > 255 ? 255 : cg, cb > 255 ? 255 : cb,
+                    (int)((c >> 24) & 255));
+  }
+}
+
+// Sombra de contacto: tres aneis concentricos no passeio. Sem shadow map, e isto
+// que faz o edificio "pousar" em vez de flutuar numa placa.
+inline void add_contact_shadow(Builder& b, float x0, float z0, float x1, float z1, float y) {
+  const float widths[3] = {2.2f, 1.2f, 0.6f};
+  const float shades[3] = {0.62f, 0.78f, 0.90f};
+  for (int i = 0; i < 3; ++i) {
+    const float w = widths[i];
+    const float yy = y + 0.001f * (float)i;
+    uint32_t c = tint3(shades[i], shades[i], shades[i]);
+    float X0 = x0 - w, X1 = x1 + w, Z0 = z0 - w, Z1 = z1 + w;
+    b.top(X0, Z0, X1, Z0 + w, yy, L_SIDEWALK, c, 6.0f);
+    b.top(X0, Z1 - w, X1, Z1, yy, L_SIDEWALK, c, 6.0f);
+    b.top(X0, Z0 + w, X0 + w, Z1 - w, yy, L_SIDEWALK, c, 6.0f);
+    b.top(X1 - w, Z0 + w, X1, Z1 - w, yy, L_SIDEWALK, c, 6.0f);
+  }
+}
+
 inline void lot_palette(uint32_t& s, float& r, float& g, float& b) {
+  // Paleta com desvio real do neutro: antes tudo ficava entre 0.82 e 1.00, ou
+  // seja, a cidade inteira saia branca. Luanda tem cal creme, terracota, areia
+  // e azul de cal.
   float p = frand(s);
-  if (p < 0.28f) { r = 1.00f; g = 0.98f; b = 0.94f; }
-  else if (p < 0.50f) { r = 1.00f; g = 0.91f; b = 0.83f; }
-  else if (p < 0.72f) { r = 0.90f; g = 0.94f; b = 0.98f; }
-  else if (p < 0.88f) { r = 0.97f; g = 0.84f; b = 0.72f; }
-  else { r = 0.82f; g = 0.83f; b = 0.80f; }
-  float k = 0.92f + frand(s) * 0.10f;
+  if (p < 0.26f)      { r = 1.10f; g = 1.00f; b = 0.86f; }
+  else if (p < 0.48f) { r = 1.16f; g = 0.90f; b = 0.74f; }
+  else if (p < 0.68f) { r = 0.84f; g = 0.93f; b = 1.10f; }
+  else if (p < 0.84f) { r = 1.04f; g = 0.86f; b = 0.70f; }
+  else if (p < 0.94f) { r = 0.90f; g = 0.97f; b = 0.88f; }
+  else                { r = 0.88f; g = 0.87f; b = 0.84f; }
+  float k = 0.94f + frand(s) * 0.12f;
   r *= k; g *= k; b *= k;
 }
 
@@ -529,6 +566,7 @@ inline std::vector<LotRecord>& lot_records() {
 inline void lot_records_clear() { lot_records().clear(); }
 
 inline int model_dominant_layer(const AssetModel& m) {
+  if (m.dom_layer != -999) return m.dom_layer;
   int lv[16], cnt[16];
   int n = 0;
   auto add = [&](int l) {
@@ -559,6 +597,7 @@ inline int model_dominant_layer(const AssetModel& m) {
   for (int i = 0; i < n; ++i) {
     if (cnt[i] > best_n) { best_n = cnt[i]; best = lv[i]; }
   }
+  m.dom_layer = best;
   return best;
 }
 
@@ -619,6 +658,13 @@ inline void add_lamp(Builder& b, float x, float z, float yaw) {
   append_model(b.v, *m, x, z, yaw, 3.3f, 0.16f);
 }
 
+// Mobiliario de rua generico (escalas medidas contra o tamanho nativo dos modelos).
+inline void add_prop(Builder& b, const char* name, float x, float z, float yaw, float scale) {
+  const AssetModel* m = asset_get(name);
+  if (!m) return;
+  append_model(b.v, *m, x, z, yaw, scale, 0.16f);
+}
+
 struct LotStyle {
   float h;
   float tintR, tintG, tintB;
@@ -672,6 +718,7 @@ inline LotStyle pick_style(uint32_t& s, int dist, bool lod1) {
 
 inline void build_building(Chunk& c, Builder& bld, float x0, float z0, float x1, float z1,
                            uint32_t& s, float baseY, int dist, bool lod1) {
+  const size_t from_ao = bld.v.v.size();
   LotStyle st = pick_style(s, dist, lod1);
   uint32_t col = tint3(st.tintR, st.tintG, st.tintB);
   float uOff = frand(s) * 8.0f;
@@ -808,6 +855,7 @@ inline void build_building(Chunk& c, Builder& bld, float x0, float z0, float x1,
   bld.top(x0 - 0.9f, z0 - 0.9f, x1 + 0.9f, z1 + 0.9f, 0.172f, L_SIDEWALK,
           tint3(0.68f, 0.66f, 0.63f), 4.0f);
   c.colliders.push_back({{x0 - 0.35f, -1.0f, z0 - 0.35f}, {x1 + 0.35f, h, z1 + 0.35f}});
+  shade_ao(bld.v, from_ao, baseY, h);
 }
 
 inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
@@ -821,6 +869,20 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
     pa.mx = {x1, baseY + 1.0f, z1};
     record_lot("procedural", pa, 1.0f, -2, 0);
     return;
+  }
+  // Modelo sem fachada (tudo cor de vertice) e com pegada grande le-se como uma
+  // placa lisa. Nesse caso o gerador procedural faz melhor trabalho.
+  {
+    const float gw = m->bounds.mx.x - m->bounds.mn.x;
+    const float gd = m->bounds.mx.z - m->bounds.mn.z;
+    if (model_dominant_layer(*m) < 0 && std::max(gw, gd) > 20.0f) {
+      build_building(c, bld, x0, z0, x1, z1, s, baseY, dist, c.lod1);
+      AABB pa;
+      pa.mn = {x0, baseY, z0};
+      pa.mx = {x1, baseY + 1.0f, z1};
+      record_lot("procedural", pa, 1.0f, -2, 0);
+      return;
+    }
   }
   float fw = m->bounds.mx.x - m->bounds.mn.x;
   float fd = m->bounds.mx.z - m->bounds.mn.z;
@@ -836,11 +898,22 @@ inline void place_lot(Chunk& c, Builder& bld, float bx, float bz, int dist,
     float tr2, tg2, tb2;
     lot_palette(s, tr2, tg2, tb2);
     tint_verts(bld.v, from, tr2, tg2, tb2);
+  } else {
+    // Os predios do centro vem de texturas creme quase brancas. Sem esta
+    // variacao a Baixa inteira le-se como uma maquete de gesso.
+    float tr2, tg2, tb2;
+    lot_palette(s, tr2, tg2, tb2);
+    tr2 = clampf(tr2, 0.80f, 1.20f);
+    tg2 = clampf(tg2, 0.80f, 1.20f);
+    tb2 = clampf(tb2, 0.80f, 1.20f);
+    tint_verts(bld.v, from, tr2, tg2, tb2);
   }
+  shade_ao(bld.v, from, baseY, (m->bounds.mx.y - m->bounds.mn.y) * sc);
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
   // Dados do lote para mw_debug_lot(x,z): nome, escala, camada dominante, tris.
   record_lot(name, a, sc, model_dominant_layer(*m), m->tris);
+  add_contact_shadow(bld, a.mn.x, a.mn.z, a.mx.x, a.mx.z, 0.170f);
   if (dist == D_BAIXA) {
     bld.top(a.mn.x - 0.9f, a.mn.z - 0.9f, a.mx.x + 0.9f, a.mx.z + 0.9f, 0.172f, L_SIDEWALK,
             tint3(0.68f, 0.66f, 0.63f), 4.0f);
@@ -863,15 +936,29 @@ inline bool place_landmark(Chunk& c, Builder& bld, const char* name, float bx, f
   float fw = m->bounds.mx.x - m->bounds.mn.x;
   float fd = m->bounds.mx.z - m->bounds.mn.z;
   float sc = std::min(x1 - x0, z1 - z0) * 0.96f / std::max(fw, fd);
+  // Sem este limite um modelo de 1,3 m (o kit e uma miniatura) era ampliado 33x
+  // e ficava um "restaurante" de 45 m com fachada de vidro lisa.
+  sc = std::min(sc, model_scale_max(name));
   float cap = model_height_cap(name);
   if (cap > 0.0f) sc = std::min(sc, cap / m->bounds.mx.y);
   float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
   float yaw = facing_yaw(bx, bz, cx, cz) + (frand(s) < 0.5f ? 1.5708f : 0.0f);
   if (std::strstr(name, "condominio") || std::strstr(name, "sanzio")) yaw = facing_yaw(bx, bz, cx, cz);
+  const size_t from = bld.v.v.size();
   append_model(bld.v, *m, cx, cz, yaw, sc, baseY);
+  {
+    // Landmarks tambem precisam de cor e de peso: sem isto eram os unicos
+    // edificios brancos de gesso que restavam na cidade.
+    float tr2, tg2, tb2;
+    lot_palette(s, tr2, tg2, tb2);
+    tint_verts(bld.v, from, clampf(tr2, 0.84f, 1.14f), clampf(tg2, 0.84f, 1.14f),
+               clampf(tb2, 0.84f, 1.14f));
+  }
+  shade_ao(bld.v, from, baseY, (m->bounds.mx.y - m->bounds.mn.y) * sc);
   AABB a;
   asset_world_aabb(*m, cx, cz, yaw, sc, baseY, a);
   record_lot(name, a, sc, model_dominant_layer(*m), m->tris);
+  add_contact_shadow(bld, a.mn.x, a.mn.z, a.mx.x, a.mx.z, 0.170f);
   bld.top(a.mn.x - 1.2f, a.mn.z - 1.2f, a.mx.x + 1.2f, a.mx.z + 1.2f, 0.172f, L_SIDEWALK,
           tint3(0.66f, 0.64f, 0.61f), 4.0f);
   a.mn.x -= 0.25f; a.mn.z -= 0.25f; a.mx.x += 0.25f; a.mx.z += 0.25f;
@@ -958,8 +1045,11 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
       const char* special = nullptr;
       if (px == 104.0f && pz == 208.0f) special = "meus/condominio_apartamentos";
       else if (px == 104.0f && pz == 312.0f) special = "meus/predio_sanzio";
-      if (down && (special || frand(s) < 0.02f) &&
-          place_landmark(c, b, special ? special : "meus/condominio_apartamentos", px, pz,
+      // Landmark so nos quarteiroes escolhidos a mao. O condominio tem faces sem
+      // textura por desenho do modelo: espalhado ao calhas, enchia a cidade de
+      // blocos brancos. Fica apenas onde o yaw e controlado.
+      if (down && special &&
+          place_landmark(c, b, special, px, pz,
                          px + 5.0f, pz + 5.0f, px + BLOCK - 5.0f, pz + BLOCK - 5.0f, s, 0.16f)) {
         g.top(px + 4.0f, pz + 4.0f, px + BLOCK - 4.0f, pz + BLOCK - 4.0f, 0.165f, L_SIDEWALK,
               tint3(0.88f, 0.86f, 0.82f), 5.0f);
@@ -1059,6 +1149,24 @@ inline void build_chunk(Chunk& c, uint32_t seed, Mesh& treeMesh, Mesh& lampMesh)
         }
         add_lamp(b, px + 1.5f, pz + 1.5f, 0.0f);
         add_lamp(b, px + BLOCK - 1.5f, pz + BLOCK - 1.5f, 3.1416f);
+
+        // Mobiliario de rua: sem isto os quarteiroes leem-se como maquete.
+        {
+          uint32_t ps = hash32(s ^ 0x5bd1e995u);
+          float bx2 = px + 10.0f + frand(ps) * (BLOCK - 20.0f);
+          if (frand(ps) < 0.70f) {
+            add_prop(b, "mobiliario/banco_praca", bx2, pz + 3.4f, 0.0f, 2.8f);
+          }
+          if (frand(ps) < 0.55f) {
+            add_prop(b, "mobiliario/lixeira", bx2 + 1.5f, pz + 3.2f, 0.0f, 2.2f);
+          }
+          if (frand(ps) < 0.18f) {
+            add_prop(b, "mobiliario/ponto_onibus", px + BLOCK * 0.5f, pz + 3.0f, 3.1416f, 3.2f);
+          }
+          if (frand(ps) < 0.30f) {
+            add_prop(b, "mobiliario/hidrante", px + 2.6f, pz + BLOCK - 5.0f, 0.0f, 2.2f);
+          }
+        }
       }
     }
   }

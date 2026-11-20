@@ -314,7 +314,7 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
   // 4 facade A - cream with deep windows
   for (int y = 0; y < S; ++y) {
     for (int x = 0; x < S; ++x) {
-      int r = 202, g = 190, b = 166;
+      int r = 168, g = 152, b = 128;
       int wx = x % 60, wy = y % 76;
       if (wy < 6) { r -= 18; g -= 18; b -= 18; }
       if (wx >= 10 && wx < 54 && wy >= 14 && wy < 62) {
@@ -339,7 +339,7 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
   // 5 facade B - terracotta with balconies
   for (int y = 0; y < S; ++y) {
     for (int x = 0; x < S; ++x) {
-      int r = 172, g = 102, b = 74;
+      int r = 148, g = 88, b = 64;
       int wx = x % 64, wy = y % 84;
       if (wy < 7) { r = 232; g = 222; b = 204; }
       else if (wy < 10) { r -= 26; g -= 26; b -= 26; }
@@ -364,7 +364,7 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
   // 6 facade C - modern ribbon glass
   for (int y = 0; y < S; ++y) {
     for (int x = 0; x < S; ++x) {
-      int r = 180, g = 188, b = 184;
+      int r = 148, g = 158, b = 154;
       int wy = y % 86;
       if (wy < 5) { r -= 14; g -= 14; b -= 12; }
       if (wy >= 24 && wy < 66) {
@@ -383,14 +383,20 @@ inline GLuint make_atlas(int S = 256, const std::vector<std::vector<uint8_t>>& e
     }
   }
   push();
-  // 7 glass
+  // 7 glass — torre de escritorios. A caixilharia antiga tinha 1 px em cada 64:
+  // depois dos mipmaps desaparecia e a fachada lia-se como um gradiente liso.
   for (int y = 0; y < S; ++y) {
     for (int x = 0; x < S; ++x) {
       float t = (float)y / S;
-      int r = (int)(34 + t * 52), g = (int)(44 + t * 54), b = (int)(58 + t * 50);
-      int d = x + y;
-      if (d % 97 < 18) { r += 62; g += 64; b += 60; }
-      if ((x % 64) == 0 || (y % 64) == 0) { r = 18; g = 24; b = 30; }
+      int r = (int)(30 + t * 46), g = (int)(40 + t * 48), b = (int)(54 + t * 44);
+      int mx = x % 32, my = y % 32;
+      if (my >= 26) { r = 78; g = 82; b = 88; }          // banda de piso
+      if (my < 3) { r = 24; g = 29; b = 35; }            // travessa
+      if (mx < 5) { r = 20; g = 25; b = 31; }            // montante vertical
+      int d = (x + y) % 96;
+      if (d < 16 && my >= 3 && mx >= 5) { r += 34; g += 36; b += 34; }  // reflexo
+      uint32_t cell = hash32((uint32_t)(x / 32) * 6151U + (uint32_t)(y / 32) * 3851U + 71U);
+      if ((cell & 3U) == 0U && my >= 3 && my < 26 && mx >= 5) { r -= 12; g -= 10; b -= 8; }
       set_px(layer, S, x, y, r, g, b, 255);
     }
   }

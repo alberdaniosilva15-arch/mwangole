@@ -67,8 +67,15 @@ export async function waitReady(ev, ms = 60000) {
   return false;
 }
 
-export async function sampleFps(ev, ms = 1400) {
-  const expr = `new Promise((res)=>{let n=0;const t0=performance.now();const tick=()=>{n++;const d=performance.now()-t0;if(d<${ms})requestAnimationFrame(tick);else res(+(n/(d/1000)).toFixed(1));};requestAnimationFrame(tick);})`;
+export async function sampleFps(ev, ms = 2200) {
+  // Mediana dos intervalos: uma travada isolada (GC, decode) nao pode decidir o
+  // veredicto de uma camara inteira, como acontecia com a media.
+  const expr = `new Promise((res)=>{const t=[];let last=performance.now();const t0=last;
+const tick=()=>{const now=performance.now();t.push(now-last);last=now;
+if(now-t0<${ms})requestAnimationFrame(tick);
+else{const s=t.slice(6).sort((a,b)=>a-b);const med=s[Math.floor(s.length/2)]||16.7;
+res(+(1000/med).toFixed(1));}};
+requestAnimationFrame(tick);})`;
   return ev(expr);
 }
 
